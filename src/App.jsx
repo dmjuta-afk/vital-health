@@ -247,21 +247,6 @@ button{cursor:pointer;font-family:var(--fb)}
 .toggle-lbl.active{color:var(--cr);font-weight:500}
 .save-badge{background:var(--gnd);color:var(--green);border:1px solid var(--gnb);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
 
-/* ── REFERRAL ── */
-.ref-page{padding:72px 0 40px;max-width:780px;margin:0 auto;padding-left:14px;padding-right:14px}
-.ref-link-row{display:flex;gap:10px;margin-top:16px}
-.ref-inp{flex:1;background:var(--s2);border:1px solid var(--border);border-radius:var(--r1);padding:11px 14px;font-size:14px;color:var(--text);font-family:var(--fb);outline:none;font-weight:300}
-.copy-btn{background:var(--gold);color:var(--obs);border:none;padding:11px 20px;border-radius:var(--r1);font-size:14px;font-weight:500;transition:all .2s;font-family:var(--fb)}
-.copy-btn:hover{background:var(--gl)}
-.copy-btn.copied{background:var(--green)}
-.share-row{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:14px}
-.share-btn{background:var(--s2);border:1px solid var(--border);border-radius:var(--r1);padding:11px 8px;text-align:center;font-size:12px;color:var(--cd);cursor:pointer;transition:all .18s;font-family:var(--fb)}
-.share-btn:hover{border-color:var(--gb);color:var(--gold);background:var(--gd)}
-.ref-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.ref-stat{background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:18px;text-align:center;box-shadow:var(--shadow)}
-.ref-stat-val{font-family:var(--fd);font-size:28px;font-weight:300;color:var(--gold)}
-.ref-stat-lbl{font-size:11px;color:var(--cd);letter-spacing:.08em;text-transform:uppercase;margin-top:4px;font-weight:400}
-
 /* ── FOOTER ── */
 .footer{border-top:1px solid var(--border);background:var(--void);padding:0;margin-top:40px}
 /* .footer-disc removed — replaced with Medical Disclaimer button */
@@ -875,7 +860,6 @@ export default function App() {
             ["exercises","💪 Exercises"],
             ["profile","👤 My Data"],
             ["pricing","Pricing"],
-            ["referral","Referrals"],
           ].map(([p,l])=>(
             <button key={p} className={`nav-btn${page===p?" active":""}`} onClick={()=>go(p)}>{l}</button>
           ))}
@@ -1112,7 +1096,7 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{background:"rgba(201,168,76,.07)",border:"1px solid rgba(201,168,76,.15)",borderRadius:"var(--r2)"}} style={{marginBottom:22}}>
+            <div style={{background:"rgba(201,168,76,.07)",border:"1px solid rgba(201,168,76,.15)",borderRadius:"var(--r2)",marginBottom:22}}>
               <div className="lbl" style={{marginBottom:5}}>AI Morning Guidance</div>
               <div style={{fontFamily:"var(--fd)",fontSize:18,fontWeight:300,marginBottom:7,color:"var(--text)"}}>
                 {vitalityScore>=75
@@ -1293,7 +1277,7 @@ export default function App() {
             </div>
 
             {/* Sleep prep tips */}
-            <div style={{background:"rgba(61,214,163,.06)",border:"1px solid rgba(61,214,163,.15)",borderRadius:"var(--r2)"}} style={{marginBottom:16}}>
+            <div style={{background:"rgba(61,214,163,.06)",border:"1px solid rgba(61,214,163,.15)",borderRadius:"var(--r2)",marginBottom:16}}>
               <div style={{fontSize:13,fontWeight:500,marginBottom:11,color:"var(--green)"}}>🌙 Sleep Optimisation Checklist</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {[
@@ -1842,85 +1826,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════
-          REFERRAL PAGE
-      ══════════════════════════════════════════════════ */}
-      {page==="referral"&&(
-        <div className="page">
-          <div className="ref-page wrap">
-            <div className="lbl">Referral Program</div>
-            <div style={{background:"rgba(201,168,76,.07)",border:"1px solid rgba(201,168,76,.15)",borderRadius:"var(--r2)"}} style={{textAlign:"center",marginBottom:20}}>
-              <h2 className="h2" style={{marginBottom:10}}>
-                Share wellness. <em>Earn rewards.</em>
-              </h2>
-              <p className="body-text" style={{maxWidth:380,margin:"0 auto",fontSize:15}}>
-                Earn R 890 credit for every friend who subscribes to any paid plan. They get their first month free.
-              </p>
-              <div className="ref-link-row" style={{maxWidth:420,margin:"16px auto 0"}}>
-                <input className="ref-inp" readOnly value="https://vitalhealth.app/r/MY2026"/>
-                <button
-                  className={`copy-btn${copied?" copied":""}`}
-                  onClick={()=>{
-                    navigator.clipboard.writeText("https://vitalhealth.app/r/MY2026").catch(()=>{});
-                    setCopied(true);
-                    showToast("✓ Link copied to clipboard!");
-                    setTimeout(()=>setCopied(false),2000);
-                  }}
-                >
-                  {copied?"✓ Copied!":"Copy Link"}
-                </button>
-              </div>
-              <div className="share-row" style={{maxWidth:360,margin:"14px auto 0"}}>
-                {[["📧","Email"],["💬","WhatsApp"],["🐦","X"],["💼","LinkedIn"]].map(([ic,n])=>(
-                  <div key={n} className="share-btn" style={{background:"var(--white)"}} onClick={()=>showToast(`Opening ${n} to share your VITÁL link...`)}>
-                    <div style={{fontSize:16,marginBottom:3}}>{ic}</div>
-                    <div>{n}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="ref-stat-grid" style={{marginBottom:20}}>
-              <div className="ref-stat"><div className="ref-stat-val">4</div><div className="ref-stat-lbl">Referrals</div></div>
-              <div className="ref-stat"><div className="ref-stat-val" style={{color:"var(--green)"}}>R 1,780</div><div className="ref-stat-lbl">Credits Earned</div></div>
-              <div className="ref-stat"><div className="ref-stat-val" style={{color:"var(--blue)"}}>2</div><div className="ref-stat-lbl">Converting</div></div>
-            </div>
-
-            <div style={{background:"rgba(61,214,163,.06)",border:"1px solid rgba(61,214,163,.15)",borderRadius:"var(--r2)"}} style={{marginBottom:16}}>
-              <div style={{fontSize:14,fontWeight:500,marginBottom:12,color:"var(--green)"}}>Top Referral Tips</div>
-              {[
-                "Share your morning vitality score — curiosity drives clicks every time",
-                "Post your wellness streak milestone — accountability challenges spread fast",
-                "WhatsApp your wellness circle — 80% of South Africa is on WhatsApp daily",
-                "LinkedIn post about energy, focus, or sleep improvement with VITÁL",
-                "Share your AI morning protocol screenshot — people love personalised content",
-              ].map((t,i)=>(
-                <div key={i} style={{display:"flex",gap:8,marginBottom:8,fontSize:14,color:"var(--text2)",fontWeight:300,alignItems:"flex-start"}}>
-                  <span style={{color:"var(--green)",flexShrink:0}}>→</span>{t}
-                </div>
-              ))}
-            </div>
-
-            <div className="card">
-              <div style={{fontSize:14,fontWeight:500,marginBottom:10}}>Why People Share VITÁL</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                {[
-                  {icon:"🌅",t:"Morning rituals that actually work"},
-                  {icon:"🌙",t:"Evening wind-downs that improve sleep"},
-                  {icon:"🤖",t:"AI that feels genuinely personal"},
-                  {icon:"🥋",t:"Tai Chi my parents can actually use"},
-                  {icon:"🫁",t:"Breathwork that calms in 4 minutes"},
-                  {icon:"🌿",t:"Herbal guidance I trust"},
-                ].map((r,i)=>(
-                  <div key={i} style={{display:"flex",gap:9,alignItems:"flex-start",fontSize:13,color:"var(--text2)",fontWeight:300}}>
-                    <span style={{fontSize:16,flexShrink:0}}>{r.icon}</span>{r.t}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      }
 
       {/* ── FOOTER ── */}
       <footer className="footer">
@@ -1931,7 +1837,6 @@ export default function App() {
             <span className="footer-link" onClick={()=>go("evening")}>Evening</span>
             <span className="footer-link" onClick={()=>go("exercises")}>Exercises</span>
             <span className="footer-link" onClick={()=>go("pricing")}>Pricing</span>
-            <span className="footer-link" onClick={()=>go("referral")}>Referrals</span>
             <span className="footer-link" onClick={()=>setModal("terms")}>Terms</span>
             <span className="footer-link" onClick={()=>setModal("privacy")}>Privacy</span>
             <button
