@@ -85,8 +85,8 @@ input,textarea,select{font-family:var(--fb)}
 .card-gold{background:var(--gold-bg);border:1.5px solid var(--gold);border-radius:var(--r3);padding:24px;box-shadow:var(--shadow)}
 .card-green{background:var(--green-bg);border:1.5px solid var(--green);border-radius:var(--r3);padding:24px}
 
-.gate{position:fixed;inset:0;background:rgba(40,40,45,.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)}
-.gate-box{background:var(--surface);border-radius:var(--r3);width:100%;max-width:540px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.28)}
+.gate{position:fixed;inset:0;background:rgba(40,40,45,.55);z-index:999;display:flex;align-items:flex-start;justify-content:center;padding:16px;backdrop-filter:blur(6px);overflow-y:auto}
+.gate-box{background:var(--surface);border-radius:var(--r3);width:100%;max-width:540px;max-height:calc(100vh - 32px);margin:auto;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.28)}
 .gate-hd{padding:24px 28px 18px;border-bottom:1px solid var(--border);background:var(--gold-bg)}
 .gate-body{padding:20px 28px;overflow-y:auto;flex:1}
 .gate-sec{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-dark);margin-top:16px;margin-bottom:5px}
@@ -446,7 +446,7 @@ export default function App() {
     <>
       <style>{CSS}</style>
       <div className="gate">
-        <div className="gate-box" style={{maxWidth:480}}>
+        <div className="gate-box" style={{maxWidth:480,overflow:"visible",maxHeight:"none"}}>
           <div style={{padding:"32px 28px 16px",textAlign:"center"}}>
             <div style={{fontSize:42,marginBottom:10}}>🌿</div>
             <h2 className="h2" style={{fontSize:26,marginBottom:8}}>Welcome to <em>VITÁL</em></h2>
