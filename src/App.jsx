@@ -29,7 +29,7 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:wght@400;500;600;700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#ECECEF;--surface:#FFFFFF;--surface2:#F4F4F6;--surface3:#EAEAEE;
+  --bg:#E2E2E6;--surface:#FFFFFF;--surface2:#F4F4F6;--surface3:#EAEAEE;
   --text:#0A0A0A;--text2:#1C1C1C;--text3:#555555;
   --border:rgba(0,0,0,.12);--border2:rgba(0,0,0,.22);
   --gold:#C9A84C;--gold-dark:#8A6D1B;--gold-bg:#FBF6E8;--gb:rgba(201,168,76,.28);
@@ -295,6 +295,8 @@ export default function App() {
   // Profile
   const [profile, setProfile] = useState({ energy: "5", stress: "5", mood: "5", sleep_hours: "7", water: "2", fitness_level: "moderate" });
   const [profileSaved, setProfileSaved] = useState(false);
+  const [morningDone, setMorningDone] = useState(false);
+  const [eveningDone, setEveningDone] = useState(false);
 
   // ─── DERIVED ───
   const isPro = userPlan === "pro" || userPlan === "elite";
@@ -591,7 +593,13 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <button className="btn btn-gold" style={{marginTop:18,width:"100%"}} onClick={() => { updateStreak(); showToast("✨ Morning ritual complete!"); }}>Complete Ritual</button>
+              <button className="btn btn-gold" style={{marginTop:18,width:"100%",background: morningDone ? "var(--green)" : "var(--gold)",color: morningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (morningDone) return; updateStreak(); setMorningDone(true); showToast("✨ Morning ritual complete! 🔥 Streak updated."); }}>{morningDone ? "✓ Completed Today" : "Complete Ritual"}</button>
+              {morningDone && (
+                <div style={{marginTop:14,padding:"14px 16px",background:"var(--green-bg)",border:"1px solid var(--green)",borderRadius:"var(--r2)",textAlign:"center"}}>
+                  <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:8}}>Beautiful start to your day 🌿</div>
+                  <button className="btn btn-outline btn-sm" onClick={() => go("coach")}>Ask your AI Coach what's next →</button>
+                </div>
+              )}
             </div>
           )}
           <div className="card" style={{textAlign:"center"}}>
@@ -636,7 +644,7 @@ export default function App() {
             <div className="lbl">Three Gratitudes</div>
             <textarea className="input" value={gratitude} onChange={e => setGratitude(e.target.value)} placeholder="Three things you're grateful for..." style={{minHeight:80,resize:"vertical",marginTop:8}} />
           </div>
-          <button className="btn btn-gold" style={{width:"100%"}} onClick={() => { updateStreak(); showToast("🌙 Evening ritual complete. Rest well."); }}>Complete Evening Ritual</button>
+          <button className="btn btn-gold" style={{width:"100%",background: eveningDone ? "var(--green)" : "var(--gold)",color: eveningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (eveningDone) return; updateStreak(); setEveningDone(true); showToast("🌙 Evening ritual complete. Rest well."); }}>{eveningDone ? "✓ Completed Tonight" : "Complete Evening Ritual"}</button>
           <div className="card-green" style={{marginTop:20}}>
             <div className="lbl" style={{color:"var(--green)"}}>Sleep Optimisation Checklist</div>
             <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:10}}>
@@ -781,6 +789,18 @@ export default function App() {
               <button onClick={() => setModal("disclaimer")} style={{background:"none",border:"none",color:"var(--text3)",fontSize:13,cursor:"pointer",fontWeight:600}}>Medical Disclaimer</button>
             </div>
             <button onClick={deleteAccount} style={{marginTop:18,background:"transparent",border:"1.5px solid rgba(214,59,79,.4)",color:"var(--red)",borderRadius:"var(--r1)",padding:"9px 18px",fontSize:12,cursor:"pointer",fontWeight:700}}>Delete My Account & All Data</button>
+
+            <div style={{marginTop:24,paddingTop:20,borderTop:"1px dashed var(--border2)"}}>
+              <div className="lbl">🔧 Test Mode (founder only)</div>
+              <p className="body-sm" style={{marginBottom:10}}>Switch your plan to preview paid features. Remove this section before public launch.</p>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {[["free","Free"],["pro","Pro"],["elite","Elite"]].map(([id,l]) => (
+                  <button key={id} onClick={() => { setUserPlan(id); try { localStorage.setItem("v10plan", id); } catch {} showToast("Plan set to " + l + " (test)"); }}
+                    className={"btn " + (userPlan === id ? "btn-gold" : "btn-outline") + " btn-sm"}>{l}</button>
+                ))}
+              </div>
+              <p className="body-sm" style={{marginTop:8}}>Current plan: <strong style={{color:"var(--gold-dark)"}}>{userPlan.toUpperCase()}</strong></p>
+            </div>
           </div>
         </div></div></div>
       )}
