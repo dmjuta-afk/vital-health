@@ -206,48 +206,49 @@ const PLANS = [
     features:[
       {t:"Daily Vitality Score (morning + evening)",i:true},
       {t:"5 AI wellness messages per day",i:true},
-      {t:"Yoga and breathwork library",i:true},
-      {t:"Morning and evening ritual guides",i:true},
-      {t:"Basic habit and sleep tracking",i:true},
-      {t:"Manual health data entry",i:true},
-      {t:"Unlimited AI personalization",i:false},
-      {t:"Advanced analytics and insights",i:false},
+      {t:"Yoga, breathwork & Tai Chi library",i:true},
+      {t:"Morning & evening ritual guides",i:true},
+      {t:"Daily mood, energy & stress check-in",i:true},
+      {t:"Streak tracking & read-aloud",i:true},
+      {t:"Unlimited AI coaching",i:false},
       {t:"AI memory across sessions",i:false},
+      {t:"Progress history & reports",i:false},
     ],
     btn:"outline",cta:"Start Free — No Card"
   },
   {
     id:"pro",tier:"Pro",price:12.99,ap:7.99,badge:"Most Popular",featured:true,
-    desc:"Everything you need for daily wellness — morning, evening, and beyond.",
+    desc:"Your AI wellness companion that knows you personally.",
     features:[
       {t:"Everything in Free",i:true},
       {t:"Unlimited AI wellness coaching",i:true},
-      {t:"AI memory — learns your patterns",i:true},
-      {t:"Full Ayurveda dosha assessment",i:true},
-      {t:"90-day wellness history",i:true},
-      {t:"Advanced sleep optimization",i:true},
-      {t:"Herbal and supplement protocols",i:true},
-      {t:"Tai Chi and Senior wellness",i:true},
-      {t:"Longevity protocols and insights",i:false},
+      {t:"AI remembers your goal & journey",i:true},
+      {t:"Longer, deeper AI guidance",i:true},
+      {t:"All 9 wellness modes (incl. Senior & Brain)",i:true},
+      {t:"Reflection & gratitude journal",i:true},
+      {t:"Priority email support",i:true},
+      {t:"Progress history & trends",i:true},
+      {t:"Weekly AI wellness report",i:true},
     ],
     btn:"gold",cta:"Start Pro — 14 Days Free"
   },
   {
     id:"elite",tier:"Elite",price:22.99,ap:13.99,
-    desc:"For those serious about longevity, performance, and deep personalization.",
+    desc:"Deep, long-term wellness intelligence that grows with you.",
     features:[
       {t:"Everything in Pro",i:true},
-      {t:"Unlimited wellness history",i:true},
-      {t:"Longevity protocols and aging science",i:true},
-      {t:"Lab result analysis and guidance",i:true},
-      {t:"Monthly expert wellness consultation",i:true},
-      {t:"Biological age score and tracking",i:true},
-      {t:"Corporate and family accounts",i:true},
-      {t:"Priority AI response and support",i:true},
+      {t:"Deepest, most detailed AI guidance",i:true},
+      {t:"Longevity & healthy-ageing focus",i:true},
+      {t:"Priority support",i:true},
+      {t:"Full wellness history & trends",i:true},
+      {t:"Weekly AI wellness report",i:true},
+      {t:"Export health summary for your doctor (CSV)",i:true},
+      {t:"Adaptive plans from your history — coming soon",i:false},
     ],
     btn:"outline",cta:"Start Elite — 14 Days Free"
   },
 ];
+
 
 const LEGAL = {
   disclaimer:{title:"Health Disclaimer",body:"VITÁL is a general wellness and lifestyle application only.\n\nNOT A MEDICAL DEVICE\nVITÁL does not diagnose, treat, cure, or prevent any disease or medical condition. It is not a substitute for professional medical advice, diagnosis, or treatment.\n\nCHILDREN UNDER 18 — PARENTAL SUPERVISION REQUIRED\nAll activities including exercises, breathing practices, yoga, Tai Chi, meditation, and AI coach interactions MUST be supervised by a parent or guardian at all times for anyone under 18 years of age. Parents and guardians are solely responsible for determining the suitability of all content for their child.\n\nMEDICATION SAFETY\nVITÁL NEVER advises you to stop, reduce, or change any medication. All suggestions are general lifestyle information only — additions to, never replacements for, your prescribed medical care.\n\nHERBAL AND SUPPLEMENT CONTENT\nHerbs and supplements can interact with medications. Always consult your doctor or pharmacist before using any supplement, herb, or natural remedy.\n\nSENIORS (60+)\nAlways consult your doctor before starting any new exercise, supplement, or dietary protocol.\n\nEXERCISE SAFETY\nStop immediately if you experience pain, dizziness, or discomfort. Consult your doctor before beginning any new exercise program.\n\nMEDICAL EMERGENCIES\nVITÁL is NOT for emergencies. Call your local emergency services immediately.\n\nEXTERNAL LINKS\nVITÁL links to YouTube for educational purposes only. We are not responsible for third-party content.\n\n© 2026 VITÁL Health · hello@vitalhealth.app"},
@@ -255,6 +256,44 @@ const LEGAL = {
   privacy:{title:"Privacy Policy",body:"DATA: Name, email, age, wellness metrics you choose to enter.\n\nSECURITY: AES-256 encryption. TLS 1.3 in transit. Supabase infrastructure.\n\nCOMPLIANCE: POPIA (South Africa) · GDPR (EU) · HIPAA-aligned wellness handling.\n\nYOUR RIGHTS: Export all data. Delete your account anytime. Opt out of any marketing.\n\nTHIRD PARTIES: Payment processors, Anthropic (AI only), Supabase database. We do NOT sell your data ever.\n\nContact: privacy@vitalhealth.app\n© 2026 ABC UP PTY LTD"},
 };
 
+
+// ─── TREND CHART (inline SVG, no libraries — cannot break) ───
+function TrendChart({ data, color, label, max = 10, unit = "" }) {
+  // data: array of {key, value} ; value may be undefined for missing days
+  const vals = data.filter(d => d.value != null);
+  if (vals.length === 0) {
+    return (
+      <div style={{padding:"20px 0",textAlign:"center",color:"var(--text3)",fontSize:13,fontWeight:600}}>
+        No {label.toLowerCase()} data yet — log a few days to see your trend.
+      </div>
+    );
+  }
+  const W = 300, H = 90, pad = 6;
+  const n = data.length;
+  const bw = (W - pad * 2) / n;
+  const avg = (vals.reduce((s, d) => s + d.value, 0) / vals.length);
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+        <span style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>{label}</span>
+        <span style={{fontSize:12,fontWeight:600,color:"var(--text3)"}}>avg {avg.toFixed(1)}{unit}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}}>
+        {data.map((d, i) => {
+          if (d.value == null) return null;
+          const h = Math.max(3, (d.value / max) * (H - 16));
+          return (
+            <rect key={i} x={pad + i * bw + 1} y={H - h - 2} width={Math.max(2, bw - 2)} height={h} rx={2} fill={color} opacity={0.85} />
+          );
+        })}
+      </svg>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--text3)",fontWeight:600,marginTop:2}}>
+        <span>{data[0]?.label || ""}</span>
+        <span>{data[data.length - 1]?.label || ""}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   // ─── STATE ───
@@ -297,6 +336,20 @@ export default function App() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [morningDone, setMorningDone] = useState(false);
   const [eveningDone, setEveningDone] = useState(false);
+  const [devUnlock, setDevUnlock] = useState(false);
+  const [logoTaps, setLogoTaps] = useState(0);
+
+  // ─── DAILY LOG (persistent history — the premium foundation) ───
+  // Stored as { "YYYY-MM-DD": {mood,energy,stress,sleep,water,morning,evening,note}, ... }
+  const [dailyLog, setDailyLog] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("v10log") || "{}"); } catch { return {}; }
+  });
+  // Key memories the AI should remember (Pro/Elite) — array of short strings
+  const [memories, setMemories] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("v10mem") || "[]"); } catch { return []; }
+  });
+  const [report, setReport] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
 
   // ─── DERIVED ───
   const isPro = userPlan === "pro" || userPlan === "elite";
@@ -311,6 +364,64 @@ export default function App() {
   // ─── HELPERS ───
   const go = (p) => { setPage(p); window.scrollTo(0, 0); };
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(""), 3000); };
+
+  // Date key helpers
+  const todayKey = () => {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  };
+  const prettyDate = (key) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+
+  // Save today's snapshot into the persistent daily log
+  const logToday = (patch) => {
+    const key = todayKey();
+    setDailyLog(prev => {
+      const next = { ...prev, [key]: { ...(prev[key] || {}), ...patch, ts: Date.now() } };
+      try { localStorage.setItem("v10log", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  // Add an AI memory (deduped, capped at 40, newest last)
+  const addMemory = (text) => {
+    const t = (text || "").trim();
+    if (!t) return;
+    setMemories(prev => {
+      if (prev.some(x => x.toLowerCase() === t.toLowerCase())) return prev;
+      const next = [...prev, t].slice(-40);
+      try { localStorage.setItem("v10mem", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const removeMemory = (i) => {
+    setMemories(prev => {
+      const next = prev.filter((_, idx) => idx !== i);
+      try { localStorage.setItem("v10mem", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  // Sorted log entries (oldest → newest), each {key, ...data}
+  const logEntries = useMemo(() => {
+    return Object.keys(dailyLog).sort().map(k => ({ key: k, ...dailyLog[k] }));
+  }, [dailyLog]);
+
+  // Build a last-N-days series for a metric: [{key,label,value}], missing days = null
+  const chartData = (metric, days) => {
+    const out = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      const entry = dailyLog[key];
+      const raw = entry && entry[metric] != null ? parseFloat(entry[metric]) : null;
+      out.push({ key, label: prettyDate(key), value: isNaN(raw) ? null : raw });
+    }
+    return out;
+  };
 
   const incrementMsg = () => {
     if (isPro) return;
@@ -339,9 +450,62 @@ export default function App() {
     } catch { showToast("Voice unavailable on this device"); }
   };
 
+  // Generate AI weekly wellness report (Pro/Elite)
+  const generateReport = async () => {
+    if (reportLoading) return;
+    setReportLoading(true);
+    try {
+      const recent = logEntries.slice(-7);
+      const summary = recent.map(e => `${prettyDate(e.key)}: mood ${e.mood ?? "-"}/10, energy ${e.energy ?? "-"}/10, stress ${e.stress ?? "-"}/10, sleep ${e.sleep ?? "-"}h${e.morning ? ", morning ritual done" : ""}${e.evening ? ", evening ritual done" : ""}`).join("\n");
+      const goalLabel = WELLNESS_GOALS.find(g => g.id === wellnessGoal)?.label || "general wellness";
+      const sys = `You are VITÁL's wellness report writer. Write a warm, encouraging weekly wellness summary (about 150 words) for someone whose goal is ${goalLabel}. Use their data to note trends, celebrate wins (streaks, consistency, improvements), and offer ONE gentle, specific suggestion for next week. Be supportive and human, never clinical. Do not diagnose. Speak directly to them as "you".`;
+      const userMsg = `Here is my wellness data for the past week:\n${summary}\n\nMy current streak is ${streak} days. Please write my weekly report.`;
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system: sys, messages: [{ role: "user", content: userMsg }], max_tokens: 400 })
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      const raw = d.content?.[0]?.text || "Could not generate report. Please try again.";
+      setReport(raw.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/#{1,3} /g, "").trim());
+    } catch {
+      setReport("Could not generate your report right now. Please check your connection and try again.");
+    }
+    setReportLoading(false);
+  };
+
+  // Export wellness history as CSV (Elite) — for sharing with a doctor
+  const exportCSV = () => {
+    try {
+      const rows = [["Date", "Mood (1-10)", "Energy (1-10)", "Stress (1-10)", "Sleep (hrs)", "Water (L)", "Morning ritual", "Evening ritual", "Reflection", "Gratitude"]];
+      logEntries.forEach(e => {
+        rows.push([
+          e.key,
+          e.mood ?? "", e.energy ?? "", e.stress ?? "", e.sleep ?? "", e.water ?? "",
+          e.morning ? "Yes" : "", e.evening ? "Yes" : "",
+          (e.reflection || "").replace(/"/g, "'"), (e.gratitude || "").replace(/"/g, "'")
+        ]);
+      });
+      const csv = rows.map(r => r.map(c => `"${String(c)}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "vital-wellness-history-" + todayKey() + ".csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("✓ Wellness history downloaded");
+    } catch {
+      showToast("Could not export. Please try again.");
+    }
+  };
+
   const deleteAccount = () => {
     if (!window.confirm("Delete all your VITÁL data permanently? This cannot be undone.")) return;
-    try { ["v10","v10onb","v10goal","v10plan","v10msg","v10streak","v10last"].forEach(k => localStorage.removeItem(k)); } catch {}
+    try { ["v10","v10onb","v10goal","v10plan","v10msg","v10streak","v10last","v10log","v10mem"].forEach(k => localStorage.removeItem(k)); } catch {}
     showToast("All data deleted. Restarting...");
     setTimeout(() => window.location.reload(), 1400);
   };
@@ -364,13 +528,31 @@ export default function App() {
     if (!isPro) incrementMsg();
     updateStreak();
 
+    // Auto-capture meaningful facts as memories (Pro/Elite only)
+    if (isPro) {
+      const low = m.toLowerCase();
+      const cues = ["i struggle with", "i have trouble", "i can't", "i cant", "i feel", "i'm dealing with", "im dealing with", "my goal is", "i want to", "i suffer from", "i was diagnosed", "i take ", "i'm trying to", "im trying to", "i love", "i hate", "i prefer", "helps me", "i usually"];
+      if (m.length > 12 && m.length < 220 && cues.some(c => low.includes(c))) {
+        addMemory(m.replace(/\s+/g, " ").trim());
+      }
+    }
+
     try {
       const hist = msgs.filter(x => x.role !== "system").map(x => ({ role: x.role === "ai" ? "assistant" : "user", content: x.text }));
       const goalLabel = WELLNESS_GOALS.find(g => g.id === wellnessGoal)?.label || "";
       const profCtx = profileSaved ? `User: energy ${profile.energy}/10, stress ${profile.stress}/10, sleep ${profile.sleep_hours}h. ` : "";
       const goalCtx = goalLabel ? `Primary goal: ${goalLabel}. ` : "";
-      const memCtx = isPro && streak > 2 ? `User has practiced ${streak} days — acknowledge naturally. ` : "";
-      const sys = `You are VITÁL Intelligence Engine — a warm, wise, emotionally intelligent AI wellness companion. ${profCtx}${goalCtx}${memCtx}Current mode: ${aiMode}. Draw from herbal medicine, Ayurveda, yoga, breathwork, meditation, sleep science, and longevity research. Be warm, concise, genuinely helpful. Keep responses to 2-3 short paragraphs. Never diagnose or advise changing medication. Respond naturally — no disclaimers on every message.${isPro ? " You know this user personally." : ""}`;
+      const streakCtx = isPro && streak > 2 ? `User has practiced ${streak} days — acknowledge naturally when relevant. ` : "";
+      // Real remembered facts (Pro/Elite)
+      const memCtx = isPro && memories.length > 0
+        ? `Things you remember about this user: ${memories.slice(-12).join("; ")}. Reference these naturally when relevant, like a companion who truly knows them. `
+        : "";
+      // Recent trend awareness (Pro/Elite)
+      const recent = isPro ? logEntries.slice(-5) : [];
+      const trendCtx = recent.length >= 2
+        ? `Recent check-ins: ${recent.map(e => `${prettyDate(e.key)} mood ${e.mood ?? "-"}, energy ${e.energy ?? "-"}, stress ${e.stress ?? "-"}`).join(" | ")}. If you notice a pattern, gently mention it. `
+        : "";
+      const sys = `You are VITÁL Intelligence Engine — a warm, wise, emotionally intelligent AI wellness companion. ${profCtx}${goalCtx}${streakCtx}${memCtx}${trendCtx}Current mode: ${aiMode}. Draw from herbal medicine, Ayurveda, yoga, breathwork, meditation, sleep science, and longevity research. Be warm, concise, genuinely helpful. Keep responses to 2-3 short paragraphs. Never diagnose or advise changing medication. Respond naturally — no disclaimers on every message.${isPro ? " You know this user personally." : ""}`;
 
       const r = await fetch("/api/chat", {
         method: "POST",
@@ -488,9 +670,9 @@ export default function App() {
 
       {/* NAV */}
       <nav className="nav">
-        <div className="nav-logo" onClick={() => go("home")}>VITÁL</div>
+        <div className="nav-logo" onClick={() => { const n = logoTaps + 1; setLogoTaps(n); if (n >= 5) { setDevUnlock(true); showToast("🔧 Test Mode unlocked in Profile"); } go("home"); }}>VITÁL</div>
         <div className="nav-links">
-          {[["home","Home"],["morning","Morning"],["evening","Evening"],["coach","AI Coach"],["exercises","Exercises"],["profile","Profile"],["pricing","Pricing"]].map(([p,l]) => (
+          {[["home","Home"],["morning","Morning"],["evening","Evening"],["coach","AI Coach"],["exercises","Exercises"],["progress","Progress"],["profile","Profile"],["pricing","Pricing"]].map(([p,l]) => (
             <button key={p} className={"nav-btn " + (page === p ? "active" : "")} onClick={() => go(p)}>{l}</button>
           ))}
         </div>
@@ -593,7 +775,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <button className="btn btn-gold" style={{marginTop:18,width:"100%",background: morningDone ? "var(--green)" : "var(--gold)",color: morningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (morningDone) return; updateStreak(); setMorningDone(true); showToast("✨ Morning ritual complete! 🔥 Streak updated."); }}>{morningDone ? "✓ Completed Today" : "Complete Ritual"}</button>
+              <button className="btn btn-gold" style={{marginTop:18,width:"100%",background: morningDone ? "var(--green)" : "var(--gold)",color: morningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (morningDone) return; updateStreak(); setMorningDone(true); logToday({ morning: true }); showToast("✨ Morning ritual complete! 🔥 Streak updated."); }}>{morningDone ? "✓ Completed Today" : "Complete Ritual"}</button>
               {morningDone && (
                 <div style={{marginTop:14,padding:"14px 16px",background:"var(--green-bg)",border:"1px solid var(--green)",borderRadius:"var(--r2)",textAlign:"center"}}>
                   <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:8}}>Beautiful start to your day 🌿</div>
@@ -644,7 +826,7 @@ export default function App() {
             <div className="lbl">Three Gratitudes</div>
             <textarea className="input" value={gratitude} onChange={e => setGratitude(e.target.value)} placeholder="Three things you're grateful for..." style={{minHeight:80,resize:"vertical",marginTop:8}} />
           </div>
-          <button className="btn btn-gold" style={{width:"100%",background: eveningDone ? "var(--green)" : "var(--gold)",color: eveningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (eveningDone) return; updateStreak(); setEveningDone(true); showToast("🌙 Evening ritual complete. Rest well."); }}>{eveningDone ? "✓ Completed Tonight" : "Complete Evening Ritual"}</button>
+          <button className="btn btn-gold" style={{width:"100%",background: eveningDone ? "var(--green)" : "var(--gold)",color: eveningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (eveningDone) return; updateStreak(); setEveningDone(true); logToday({ evening: true, reflection: reflection.slice(0,500), gratitude: gratitude.slice(0,500) }); showToast("🌙 Evening ritual complete. Rest well."); }}>{eveningDone ? "✓ Completed Tonight" : "Complete Evening Ritual"}</button>
           <div className="card-green" style={{marginTop:20}}>
             <div className="lbl" style={{color:"var(--green)"}}>Sleep Optimisation Checklist</div>
             <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:10}}>
@@ -746,6 +928,136 @@ export default function App() {
         </div>
       )}
 
+      {/* PROGRESS */}
+      {page === "progress" && (
+        <div className="page"><div className="wrap"><div className="section">
+          <div className="lbl">Your Progress</div>
+          <h2 className="h2" style={{marginBottom:8}}>How you're <em>evolving</em>.</h2>
+          <p className="body-text" style={{marginBottom:24,maxWidth:600}}>Your wellness journey, tracked over time. The more you check in, the clearer your patterns become.</p>
+
+          {/* Summary stats */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:12,marginBottom:24}}>
+            {[
+              {label:"Day streak",value:streak,icon:"🔥"},
+              {label:"Days logged",value:logEntries.length,icon:"📊"},
+              {label:"Rituals done",value:logEntries.filter(e => e.morning || e.evening).length,icon:"✨"},
+            ].map(s => (
+              <div key={s.label} className="card" style={{textAlign:"center",padding:18}}>
+                <div style={{fontSize:22,marginBottom:4}}>{s.icon}</div>
+                <div style={{fontSize:28,fontFamily:"var(--fd)",fontWeight:600,color:"var(--gold-dark)",lineHeight:1}}>{s.value}</div>
+                <div className="body-sm" style={{marginTop:4}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {!isPro ? (
+            <div className="card-gold" style={{textAlign:"center"}}>
+              <div style={{fontSize:28,marginBottom:8}}>📈</div>
+              <h3 className="h3" style={{marginBottom:10}}>Unlock your full history</h3>
+              <p className="body-text" style={{maxWidth:440,margin:"0 auto 16px"}}>
+                Free shows your last 7 days. Upgrade to Pro to see your complete trends, patterns, and progress over time.
+              </p>
+              <button className="btn btn-gold" onClick={() => go("pricing")}>See Pro Plans</button>
+              <div style={{marginTop:24,textAlign:"left"}}>
+                <div className="lbl">Last 7 days</div>
+                <div style={{display:"flex",flexDirection:"column",gap:18,marginTop:12}}>
+                  <TrendChart data={chartData("mood", 7)} color="#1FA877" label="Mood" max={10} />
+                  <TrendChart data={chartData("energy", 7)} color="#C9A84C" label="Energy" max={10} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="card">
+              <div className="lbl">Your trends (last 30 days)</div>
+              <div style={{display:"flex",flexDirection:"column",gap:20,marginTop:14}}>
+                <TrendChart data={chartData("mood", 30)} color="#1FA877" label="Mood" max={10} />
+                <TrendChart data={chartData("energy", 30)} color="#C9A84C" label="Energy" max={10} />
+                <TrendChart data={chartData("stress", 30)} color="#D63B4F" label="Stress" max={10} />
+                <TrendChart data={chartData("sleep", 30)} color="#3B7DD8" label="Sleep" max={12} unit="h" />
+              </div>
+            </div>
+          )}
+
+          {/* Recent entries list */}
+          {logEntries.length > 0 && (
+            <div className="card" style={{marginTop:16}}>
+              <div className="lbl">Recent check-ins</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:10}}>
+                {logEntries.slice(-7).reverse().map(e => (
+                  <div key={e.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--border)",fontSize:13}}>
+                    <span style={{fontWeight:700,color:"var(--text)"}}>{prettyDate(e.key)}</span>
+                    <span style={{color:"var(--text3)",fontWeight:600,display:"flex",gap:10,flexWrap:"wrap"}}>
+                      {e.mood != null && <span>😊 {e.mood}</span>}
+                      {e.energy != null && <span>⚡ {e.energy}</span>}
+                      {e.sleep != null && <span>💤 {e.sleep}h</span>}
+                      {e.morning && <span>☀️</span>}
+                      {e.evening && <span>🌙</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {logEntries.length === 0 && (
+            <div className="card" style={{textAlign:"center",marginTop:16}}>
+              <p className="body-text">No check-ins yet. Visit your <strong>Profile</strong> to log how you feel, or complete a morning/evening ritual — your progress will appear here.</p>
+              <button className="btn btn-outline" style={{marginTop:14}} onClick={() => go("profile")}>Log my first check-in</button>
+            </div>
+          )}
+
+          {/* Weekly report (Pro/Elite) */}
+          {isPro && logEntries.length >= 2 && (
+            <div className="card-gold" style={{marginTop:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div className="lbl" style={{margin:0}}>Weekly Wellness Report</div>
+                <button className="readaloud" style={{padding:"6px 14px",fontSize:13}} onClick={() => generateReport()} disabled={reportLoading}>{reportLoading ? "Generating..." : "✨ Generate"}</button>
+              </div>
+              {report ? (
+                <div style={{marginTop:14}}>
+                  <div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,whiteSpace:"pre-wrap",fontWeight:500}}>{report}</div>
+                  <button className="btn btn-outline btn-sm" style={{marginTop:14}} onClick={() => speak(report)}>🔊 {speaking ? "Stop" : "Read aloud"}</button>
+                </div>
+              ) : (
+                <p className="body-sm" style={{marginTop:10}}>Tap Generate for a personalised AI summary of your week — trends, wins, and a gentle suggestion for the days ahead.</p>
+              )}
+            </div>
+          )}
+
+          {/* What VITÁL remembers (Pro/Elite) — trust & control */}
+          {isPro && (
+            <div className="card" style={{marginTop:16}}>
+              <div className="lbl">What VITÁL remembers about you</div>
+              {memories.length === 0 ? (
+                <p className="body-sm" style={{marginTop:8}}>As you chat with your AI Coach, it remembers what matters to you here — so guidance stays personal. Nothing is shared; it lives only on your device.</p>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:10}}>
+                  {memories.slice().reverse().map((mem, ri) => {
+                    const i = memories.length - 1 - ri;
+                    return (
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,padding:"8px 10px",background:"var(--surface2)",borderRadius:"var(--r1)"}}>
+                        <span style={{fontSize:13,color:"var(--text2)",fontWeight:500,lineHeight:1.5}}>{mem}</span>
+                        <button onClick={() => removeMemory(i)} style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",fontSize:16,flexShrink:0,lineHeight:1}}>×</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Doctor export (Elite) */}
+          {isElite && logEntries.length >= 1 && (
+            <div className="card-green" style={{marginTop:16}}>
+              <div className="lbl" style={{color:"var(--green)"}}>Export for your doctor</div>
+              <p className="body-sm" style={{marginTop:8,marginBottom:12}}>Download your wellness history as a spreadsheet (CSV) to share with your healthcare practitioner. Includes all your logged mood, energy, stress, sleep and rituals.</p>
+              <button className="btn btn-green btn-sm" onClick={() => exportCSV()}>⬇ Download my wellness history (CSV)</button>
+            </div>
+          )}
+
+        </div></div></div>
+      )}
+
       {/* PROFILE */}
       {page === "profile" && (
         <div className="page"><div className="wrap"><div className="section">
@@ -780,7 +1092,7 @@ export default function App() {
               <div><div style={{fontSize:12,color:"var(--text2)",marginBottom:4,fontWeight:600}}>Water (L)</div><input type="number" step="0.5" className="input" value={profile.water} onChange={e => setProfile(p => ({...p, water: e.target.value}))} /></div>
             </div>
           </div>
-          <button className="btn btn-gold" style={{width:"100%",padding:14,marginBottom:24}} onClick={() => { setProfileSaved(true); showToast("✓ Profile saved — your AI is now personalised"); setTimeout(() => go("home"), 1100); }}>Save Profile</button>
+          <button className="btn btn-gold" style={{width:"100%",padding:14,marginBottom:24}} onClick={() => { setProfileSaved(true); logToday({ mood: profile.mood, energy: profile.energy, stress: profile.stress, sleep: profile.sleep_hours, water: profile.water }); showToast("✓ Saved — today's check-in logged"); setTimeout(() => go("home"), 1100); }}>Save Profile</button>
           <div style={{paddingTop:24,borderTop:"1px solid var(--border)"}}>
             <div className="lbl">Account</div>
             <div style={{marginTop:12,display:"flex",gap:16,flexWrap:"wrap"}}>
@@ -790,9 +1102,10 @@ export default function App() {
             </div>
             <button onClick={deleteAccount} style={{marginTop:18,background:"transparent",border:"1.5px solid rgba(214,59,79,.4)",color:"var(--red)",borderRadius:"var(--r1)",padding:"9px 18px",fontSize:12,cursor:"pointer",fontWeight:700}}>Delete My Account & All Data</button>
 
+            {devUnlock && (
             <div style={{marginTop:24,paddingTop:20,borderTop:"1px dashed var(--border2)"}}>
               <div className="lbl">🔧 Test Mode (founder only)</div>
-              <p className="body-sm" style={{marginBottom:10}}>Switch your plan to preview paid features. Remove this section before public launch.</p>
+              <p className="body-sm" style={{marginBottom:10}}>Switch your plan to preview paid features.</p>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {[["free","Free"],["pro","Pro"],["elite","Elite"]].map(([id,l]) => (
                   <button key={id} onClick={() => { setUserPlan(id); try { localStorage.setItem("v10plan", id); } catch {} showToast("Plan set to " + l + " (test)"); }}
@@ -801,6 +1114,7 @@ export default function App() {
               </div>
               <p className="body-sm" style={{marginTop:8}}>Current plan: <strong style={{color:"var(--gold-dark)"}}>{userPlan.toUpperCase()}</strong></p>
             </div>
+            )}
           </div>
         </div></div></div>
       )}
