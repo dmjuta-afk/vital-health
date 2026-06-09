@@ -1,4 +1,5 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { track } from "@vercel/analytics";
 
 /* ═══════════════════════════════════════════════════════════════
    VITÁL v10 — AI Wellness Companion · ABC UP PTY LTD © 2026
@@ -6,10 +7,12 @@ import { useState, useRef, useMemo } from "react";
 ═══════════════════════════════════════════════════════════════ */
 
 const PAYSTACK = {
-  pro_monthly: "https://paystack.shop/pay/1mwfesczze",
-  pro_annual:  "https://paystack.shop/pay/chq70ice7y",
-  elite_monthly: "https://paystack.shop/pay/u4ikzukjjx",
-  elite_annual:  "https://paystack.shop/pay/u4ikzukjjx",
+  // Founder pricing (first 100 — used while FOUNDER_MODE is on)
+  founder_monthly: "https://paystack.shop/pay/lul6fb7ney",
+  founder_annual:  "https://paystack.shop/pay/zti9jqkavw",
+  // Regular pricing (used after FOUNDER_MODE is turned off)
+  pro_monthly: "https://paystack.shop/pay/e5ib6ecwbc",
+  pro_annual:  "https://paystack.shop/pay/pw8hour4r9",
 };
 
 const WELLNESS_GOALS = [
@@ -24,6 +27,11 @@ const WELLNESS_GOALS = [
 ];
 
 const FREE_DAILY_LIMIT = 5;
+
+// ─── FOUNDER LAUNCH ─── (first 100 subscribers lock their rate forever)
+// Flip FOUNDER_MODE to false once the first 100 founding members are reached.
+const FOUNDER_MODE = true;
+const FOUNDER_SPOTS = 100;
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Sans:wght@400;500;600;700&display=swap');
@@ -64,9 +72,9 @@ input,textarea,select{font-family:var(--fb)}
 .nav-logo{font-family:var(--fd);font-size:24px;font-weight:600;color:var(--gold-dark);letter-spacing:.06em;cursor:pointer;flex-shrink:0}
 .nav-links{display:flex;gap:2px;overflow-x:auto;flex:1;scrollbar-width:none}
 .nav-links::-webkit-scrollbar{display:none}
-.nav-btn{background:none;border:none;color:var(--text2);font-size:14px;padding:7px 11px;border-radius:var(--r1);white-space:nowrap;font-weight:600;transition:all .15s}
-.nav-btn:hover{background:var(--surface2)}
-.nav-btn.active{color:var(--gold-dark);background:rgba(201,168,76,.16);font-weight:700}
+.nav-btn{background:none;border:none;color:#0A0A0A;font-size:14px;padding:7px 11px;border-radius:var(--r1);white-space:nowrap;font-weight:700;transition:all .15s}
+.nav-btn:hover{background:var(--gold-bg);color:var(--gold-dark)}
+.nav-btn.active{color:#0A0A0A;background:var(--gold);font-weight:700}
 .nav-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
 
 .page{padding-top:62px;min-height:100vh;background:var(--bg);padding-bottom:40px;animation:fadeUp .3s ease}
@@ -108,58 +116,159 @@ input,textarea,select{font-family:var(--fb)}
 
 .readaloud{background:var(--gold);color:#0A0A0A;border:none;border-radius:var(--r1);padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:var(--shadow)}
 .readaloud:hover{background:#D8B85C;transform:translateY(-1px)}
+
 `;
 
-const MORNING_ROUTINES = {
-  "2": [
-    {icon:"🫁",name:"Box Breathing",dur:"2 min",desc:"Inhale 4 · Hold 4 · Exhale 4 · Hold 4",cat:"breathing"},
-    {icon:"💧",name:"Hydration Check",dur:"1 min",desc:"Log your water. Set your intention.",cat:"general"},
-  ],
-  "5": [
-    {icon:"🌅",name:"Sun Salutation",dur:"5 min",desc:"3 gentle rounds to wake the body",cat:"yoga"},
-    {icon:"🫁",name:"4-7-8 Breathing",dur:"3 min",desc:"Calm anxiety. Set focus.",cat:"breathing"},
-    {icon:"🧠",name:"Gratitude Prompt",dur:"2 min",desc:"Name 3 things you are grateful for today",cat:"mind"},
-  ],
-  "10": [
-    {icon:"🧘",name:"Morning Yoga",dur:"7 min",desc:"Sun salutations, warrior poses, gentle stretches",cat:"yoga"},
-    {icon:"🫁",name:"Coherence Breathing",dur:"5 min",desc:"5-5 rhythm. Maximizes HRV.",cat:"breathing"},
-    {icon:"✍️",name:"Morning Intention",dur:"3 min",desc:"Write one goal. One feeling. One action.",cat:"mind"},
-    {icon:"🌿",name:"Herbal Tip",dur:"1 min",desc:"Ashwagandha with breakfast for energy resilience",cat:"herbal"},
-  ],
-  "20": [
-    {icon:"🧘",name:"Full Morning Yoga",dur:"12 min",desc:"Complete sun salutation flow — all levels",cat:"yoga"},
-    {icon:"🫁",name:"Pranayama",dur:"6 min",desc:"Nadi Shodhana then Kapalabhati energy breath",cat:"breathing"},
-    {icon:"🧠",name:"Meditation",dur:"5 min",desc:"Body scan followed by loving-kindness practice",cat:"mind"},
-    {icon:"🌿",name:"Morning Protocol",dur:"2 min",desc:"Ashwagandha + Rhodiola + lemon water ritual",cat:"herbal"},
-    {icon:"✍️",name:"Journal Prompt",dur:"3 min",desc:"How do I want to feel today, and why?",cat:"mind"},
-  ],
-};
+// ─── MORNING RITUALS — 3 themes, each with steps per time length ───
+// Themes rotate daily so the practice feels fresh; users can also scroll to choose.
+const MORNING_THEMES = [
+  {
+    id:"ground", name:"Grounding", icon:"🌱", blurb:"Steady, centred, calm start",
+    times:{
+      "2":[
+        {icon:"🫁",name:"Box Breathing",dur:"2 min",desc:"Inhale 4 · Hold 4 · Exhale 4 · Hold 4",cat:"breathing"},
+        {icon:"💧",name:"Hydration & Intention",dur:"1 min",desc:"Drink water. Name one intention for today.",cat:"general"},
+      ],
+      "5":[
+        {icon:"🦶",name:"Grounding Stand",dur:"1 min",desc:"Feet flat, feel the floor. Three slow breaths.",cat:"mind"},
+        {icon:"🫁",name:"Coherence Breathing",dur:"3 min",desc:"In for 5, out for 5. Settle the nervous system.",cat:"breathing"},
+        {icon:"📝",name:"One Intention",dur:"1 min",desc:"Write the single most important thing for today.",cat:"mind"},
+      ],
+      "10":[
+        {icon:"🧘",name:"Gentle Wake-Up Stretch",dur:"4 min",desc:"Neck rolls, shoulder circles, slow side bends",cat:"yoga"},
+        {icon:"🫁",name:"Coherence Breathing",dur:"4 min",desc:"5-5 rhythm to ground and centre",cat:"breathing"},
+        {icon:"📝",name:"Morning Intention",dur:"2 min",desc:"One goal, one feeling, one action for the day",cat:"mind"},
+      ],
+      "20":[
+        {icon:"🧘",name:"Grounding Yoga Flow",dur:"10 min",desc:"Mountain, forward fold, low lunge, gentle twists",cat:"yoga"},
+        {icon:"🫁",name:"Nadi Shodhana",dur:"6 min",desc:"Alternate nostril breathing for balance",cat:"breathing"},
+        {icon:"🧠",name:"Grounding Meditation",dur:"4 min",desc:"Body scan from feet to crown, slow and present",cat:"mind"},
+      ],
+    },
+  },
+  {
+    id:"energize", name:"Energizing", icon:"⚡", blurb:"Wake the body, lift the mood",
+    times:{
+      "2":[
+        {icon:"🌬️",name:"Energizing Breath",dur:"1 min",desc:"10 quick, full breaths to wake up",cat:"breathing"},
+        {icon:"🙆",name:"Big Stretch",dur:"1 min",desc:"Reach tall, open the chest, shake it out",cat:"yoga"},
+      ],
+      "5":[
+        {icon:"🌅",name:"Sun Salutation",dur:"3 min",desc:"3 rounds to energise the whole body",cat:"yoga"},
+        {icon:"🌬️",name:"Bellows Breath",dur:"1 min",desc:"Short, lively breaths for a natural lift",cat:"breathing"},
+        {icon:"💪",name:"Power Pose",dur:"1 min",desc:"Stand tall, arms wide, breathe. Own the day.",cat:"mind"},
+      ],
+      "10":[
+        {icon:"🌅",name:"Morning Sun Flow",dur:"6 min",desc:"Sun salutations into gentle warrior poses",cat:"yoga"},
+        {icon:"🌬️",name:"Kapalabhati Breath",dur:"2 min",desc:"Energising skull-shining breath (gentle pace)",cat:"breathing"},
+        {icon:"☀️",name:"Gratitude Boost",dur:"2 min",desc:"Three things you're excited about today",cat:"mind"},
+      ],
+      "20":[
+        {icon:"🌅",name:"Full Sun Salutation Flow",dur:"12 min",desc:"Complete energising flow, all levels",cat:"yoga"},
+        {icon:"🌬️",name:"Energising Pranayama",dur:"5 min",desc:"Bellows breath then bright breath of joy",cat:"breathing"},
+        {icon:"💪",name:"Intention & Movement",dur:"3 min",desc:"Set a bold intention, then shake and dance it in",cat:"mind"},
+      ],
+    },
+  },
+  {
+    id:"clarity", name:"Clarity & Focus", icon:"🧠", blurb:"Clear the mind, sharpen focus",
+    times:{
+      "2":[
+        {icon:"🫁",name:"4-7-8 Breathing",dur:"1 min",desc:"Calm the mind, sharpen attention",cat:"breathing"},
+        {icon:"🎯",name:"Top Priority",dur:"1 min",desc:"Name your one focus for the day",cat:"mind"},
+      ],
+      "5":[
+        {icon:"🧠",name:"Focus Meditation",dur:"3 min",desc:"Rest attention on the breath, return gently",cat:"mind"},
+        {icon:"🫁",name:"4-7-8 Breathing",dur:"1 min",desc:"Settle the mind before the day begins",cat:"breathing"},
+        {icon:"🎯",name:"Three Priorities",dur:"1 min",desc:"Write your top 3 for today, in order",cat:"mind"},
+      ],
+      "10":[
+        {icon:"🧠",name:"Mindful Sitting",dur:"5 min",desc:"Quiet focus practice to clear mental fog",cat:"mind"},
+        {icon:"🫁",name:"Nadi Shodhana",dur:"3 min",desc:"Balance both hemispheres for clarity",cat:"breathing"},
+        {icon:"🎯",name:"Day Plan",dur:"2 min",desc:"Map your 3 priorities and first small step",cat:"mind"},
+      ],
+      "20":[
+        {icon:"🧠",name:"Clarity Meditation",dur:"8 min",desc:"Breath focus, then open awareness practice",cat:"mind"},
+        {icon:"🫁",name:"Nadi Shodhana",dur:"6 min",desc:"Alternate nostril breathing for mental balance",cat:"breathing"},
+        {icon:"🎯",name:"Intentional Planning",dur:"4 min",desc:"Priorities, energy check, and one thing to let go",cat:"mind"},
+      ],
+    },
+  },
+];
 
-const EVENING_ROUTINES = {
-  "2": [
-    {icon:"🫁",name:"4-7-8 Sleep Breath",dur:"2 min",desc:"4 in · 7 hold · 8 out. Activates rest.",cat:"breathing"},
-    {icon:"😴",name:"Sleep Intention",dur:"1 min",desc:"Put your phone down. Close your eyes. Arrive.",cat:"mind"},
-  ],
-  "5": [
-    {icon:"🧘",name:"Evening Wind-Down",dur:"4 min",desc:"Child's pose · Supine twist · Legs up the wall",cat:"yoga"},
-    {icon:"🫁",name:"Box Breathing",dur:"3 min",desc:"Slow your nervous system. Prepare for sleep.",cat:"breathing"},
-    {icon:"✍️",name:"Day Review",dur:"2 min",desc:"What went well? What am I releasing tonight?",cat:"mind"},
-  ],
-  "10": [
-    {icon:"🧘",name:"Yin Yoga Wind-Down",dur:"8 min",desc:"Hold each pose 2-3 min. Total surrender.",cat:"yoga"},
-    {icon:"🫁",name:"4-7-8 Breathing",dur:"4 min",desc:"4 cycles. Deep parasympathetic activation.",cat:"breathing"},
-    {icon:"🧠",name:"Guided Body Scan",dur:"5 min",desc:"Progressive muscle release from feet to crown",cat:"meditation"},
-    {icon:"🙏",name:"Gratitude Practice",dur:"2 min",desc:"Three things. Specific. Feel them.",cat:"mind"},
-  ],
-  "20": [
-    {icon:"🧘",name:"Full Yin Sequence",dur:"12 min",desc:"Dragon · Butterfly · Sphinx · Savasana",cat:"yoga"},
-    {icon:"🫁",name:"NSDR Protocol",dur:"6 min",desc:"Non-Sleep Deep Rest. Navy SEAL technique.",cat:"breathing"},
-    {icon:"🧠",name:"Sleep Meditation",dur:"8 min",desc:"Yoga Nidra body scan for deep rest",cat:"meditation"},
-    {icon:"🌙",name:"Herbal Wind-Down",dur:"2 min",desc:"Ashwagandha + Magnesium glycinate + chamomile",cat:"herbal"},
-    {icon:"✍️",name:"Evening Journal",dur:"5 min",desc:"What did I do well today? What am I releasing?",cat:"mind"},
-  ],
-};
-
+// ─── EVENING RITUALS — 3 themes ───
+const EVENING_THEMES = [
+  {
+    id:"unwind", name:"Unwind", icon:"🌇", blurb:"Release the day's tension",
+    times:{
+      "2":[
+        {icon:"🫁",name:"4-7-8 Sleep Breath",dur:"2 min",desc:"4 in · 7 hold · 8 out. Let the day go.",cat:"breathing"},
+        {icon:"📵",name:"Screen Down",dur:"1 min",desc:"Phone away. One slow exhale to arrive.",cat:"mind"},
+      ],
+      "5":[
+        {icon:"🧘",name:"Evening Wind-Down",dur:"3 min",desc:"Child's pose, supine twist, gentle folds",cat:"yoga"},
+        {icon:"🫁",name:"Box Breathing",dur:"2 min",desc:"Slow the nervous system after a busy day",cat:"breathing"},
+      ],
+      "10":[
+        {icon:"🧘",name:"Yin Wind-Down",dur:"6 min",desc:"Hold gentle poses, soften with each breath",cat:"yoga"},
+        {icon:"🫁",name:"4-7-8 Breathing",dur:"2 min",desc:"Deep calming breath to release tension",cat:"breathing"},
+        {icon:"📝",name:"Day Release",dur:"2 min",desc:"What went well? What are you setting down tonight?",cat:"mind"},
+      ],
+      "20":[
+        {icon:"🧘",name:"Full Yin Sequence",dur:"12 min",desc:"Dragon, butterfly, sphinx — deep release",cat:"yoga"},
+        {icon:"🫁",name:"Extended 4-7-8",dur:"4 min",desc:"Several rounds for full-body calm",cat:"breathing"},
+        {icon:"📝",name:"Evening Journal",dur:"4 min",desc:"Reflect, release, and set tomorrow's intention",cat:"mind"},
+      ],
+    },
+  },
+  {
+    id:"deeprest", name:"Deep Rest", icon:"🌙", blurb:"Prepare for deep sleep",
+    times:{
+      "2":[
+        {icon:"🫁",name:"4-7-8 Sleep Breath",dur:"2 min",desc:"The classic breath for falling asleep",cat:"breathing"},
+        {icon:"😴",name:"Settle In",dur:"1 min",desc:"Soften the body from head to toe",cat:"mind"},
+      ],
+      "5":[
+        {icon:"🛌",name:"Legs Up The Wall",dur:"3 min",desc:"Calms the nervous system, eases the body",cat:"yoga"},
+        {icon:"🫁",name:"4-7-8 Breathing",dur:"2 min",desc:"Slow the breath, invite sleep",cat:"breathing"},
+      ],
+      "10":[
+        {icon:"🧠",name:"Body Scan",dur:"5 min",desc:"Release each part of the body in turn",cat:"meditation"},
+        {icon:"🫁",name:"4-7-8 Breathing",dur:"3 min",desc:"Deep parasympathetic wind-down",cat:"breathing"},
+        {icon:"🌙",name:"Sleep Intention",dur:"2 min",desc:"Let go of today. Welcome rest.",cat:"mind"},
+      ],
+      "20":[
+        {icon:"🧠",name:"Yoga Nidra",dur:"10 min",desc:"Guided deep-rest body scan for sleep",cat:"meditation"},
+        {icon:"🫁",name:"NSDR Wind-Down",dur:"6 min",desc:"Non-sleep deep rest to ease into the night",cat:"breathing"},
+        {icon:"🌙",name:"Herbal Wind-Down",dur:"4 min",desc:"Calming tea ritual, then settle the mind",cat:"herbal"},
+      ],
+    },
+  },
+  {
+    id:"gratitude", name:"Gratitude & Reflect", icon:"🙏", blurb:"End the day with warmth",
+    times:{
+      "2":[
+        {icon:"🙏",name:"Three Gratitudes",dur:"1 min",desc:"Name three good things from today",cat:"mind"},
+        {icon:"🫁",name:"Calming Breath",dur:"1 min",desc:"Three slow breaths to close the day",cat:"breathing"},
+      ],
+      "5":[
+        {icon:"🙏",name:"Gratitude Practice",dur:"2 min",desc:"Three things, specific — really feel them",cat:"mind"},
+        {icon:"🧘",name:"Gentle Stretch",dur:"2 min",desc:"Soft neck and shoulder release",cat:"yoga"},
+        {icon:"🫁",name:"Calming Breath",dur:"1 min",desc:"Slow exhales to wind down",cat:"breathing"},
+      ],
+      "10":[
+        {icon:"📝",name:"Reflection Journal",dur:"4 min",desc:"What went well? What did you learn today?",cat:"mind"},
+        {icon:"🙏",name:"Gratitude Practice",dur:"3 min",desc:"Three specific gratitudes, felt fully",cat:"mind"},
+        {icon:"🫁",name:"Calming Breath",dur:"2 min",desc:"Settle into a peaceful evening",cat:"breathing"},
+      ],
+      "20":[
+        {icon:"📝",name:"Evening Journal",dur:"8 min",desc:"Reflect on the day, release, and give thanks",cat:"mind"},
+        {icon:"🙏",name:"Loving-Kindness",dur:"6 min",desc:"Send warm wishes to yourself and others",cat:"meditation"},
+        {icon:"🫁",name:"Calming Breath",dur:"4 min",desc:"Long, slow exhales to prepare for rest",cat:"breathing"},
+      ],
+    },
+  },
+];
 const AI_MODES = [
   {id:"wellness",icon:"🧬",label:"Wellness Coach"},
   {id:"herbal",icon:"🌿",label:"Herbal Guide"},
@@ -173,6 +282,19 @@ const AI_MODES = [
 ];
 
 const INIT_MSG = {role:"ai",text:"Namaste. I am your VITÁL Intelligence Engine.\n\nI draw from Ayurveda, herbal wisdom, yoga, breathwork, meditation, sleep science, and longevity research — all personalised to you.\n\nWhat would you like to explore today?"};
+
+// Tappable suggestion chips per AI mode — quick starts, users can still type their own
+const AI_SUGGESTIONS = {
+  wellness: ["I feel stressed and tense", "How can I boost my energy?", "Help me build a daily routine", "I'm feeling burnt out"],
+  herbal: ["Herbs for better sleep", "Natural remedies for stress", "What helps with low energy?", "Herbs for immunity"],
+  yoga: ["Yoga for back pain", "Morning yoga routine", "Yoga for better sleep", "Gentle yoga for beginners"],
+  breathing: ["Breathing to calm anxiety", "Breathwork for sleep", "A quick energy breath", "Breathing for focus"],
+  meditation: ["A 5-minute meditation", "How do I quiet my mind?", "Meditation for anxiety", "Help me start meditating"],
+  ayurveda: ["What is my dosha?", "Ayurveda for digestion", "Balancing my energy", "An Ayurvedic morning routine"],
+  sleep: ["I can't fall asleep", "How to sleep more deeply", "A wind-down routine", "I keep waking at night"],
+  senior: ["Gentle exercises for seniors", "Improving my balance", "Easy stretches for stiff joints", "Staying active safely"],
+  brain: ["How to improve focus", "Reduce brain fog", "Habits for memory", "Calm a racing mind"],
+};
 
 const YOGA_DATA = [
   {name:"Sun Salutation",level:"Beginner · 10 min",benefit:"Energizes the full body, improves circulation",poses:["Mountain Pose — stand tall, feet together","Forward Fold — hinge at hips, soften knees","Plank — shoulders over wrists, core engaged","Chaturanga — lower slowly, elbows in","Upward Dog — chest open, hips low","Downward Dog — hips high, press heels","Step forward, rise to Mountain Pose","Repeat 5 to 12 rounds"],tip:"Move with your breath — inhale to expand, exhale to fold. Begin slowly and build rhythm.",warn:null,yt:"https://www.youtube.com/results?search_query=sun+salutation+yoga+beginners+10+minutes",ytlbl:"Watch Sun Salutation tutorials"},
@@ -199,6 +321,15 @@ const TAICHI_DATA = [
   {name:"Qigong Morning Flow",level:"Gentle · 10 min · All ages welcome",benefit:"Energy cultivation, stress relief, and improved lung health",poses:["Gentle full-body shake — 30 seconds","Loose fists tapping the kidneys on lower back","Opening the chest — arms sweep wide on inhale","Closing the chest — arms cross on exhale","Lifting the sky — push hands up, breathe deeply in","Pushing the mountains — push forward, breathe out"],tip:"Qigong is the sister practice to Tai Chi. Do it first thing in the morning before breakfast — even 5 minutes creates a shift.",warn:"Extremely gentle. Safe for most conditions including early post-surgery recovery. Always check with your doctor after major surgery.",yt:"https://www.youtube.com/results?search_query=qigong+morning+routine+beginners+gentle+flow",ytlbl:"Watch Qigong Morning Flow"},
 ];
 
+const MEDITATION_DATA = [
+  {name:"Mindful Breath Meditation",level:"Beginner · 5 to 10 min",benefit:"Calms the mind and builds focus — the perfect starting point",poses:["Sit comfortably, spine tall, hands resting","Close your eyes, take three slow breaths","Rest your attention on the natural breath","When the mind wanders, gently return to the breath","No judgement — returning IS the practice","Start with 5 minutes, build slowly"],tip:"You are not trying to empty your mind — just noticing when it drifts and returning. That is the whole skill.",warn:null,yt:"https://www.youtube.com/results?search_query=mindful+breathing+meditation+for+beginners+guided",ytlbl:"Watch Mindful Breath Meditation"},
+  {name:"Body Scan Meditation",level:"All levels · 10 to 15 min",benefit:"Releases physical tension and deepens body awareness",poses:["Lie down or sit comfortably","Bring attention to the top of your head","Slowly move awareness down through the body","Notice sensations without trying to change them","Soften any area holding tension","Finish at the toes, resting in whole-body awareness"],tip:"Wonderful before sleep — many people drift off before they finish. That is perfectly fine.",warn:null,yt:"https://www.youtube.com/results?search_query=body+scan+meditation+guided+relaxation",ytlbl:"Watch Body Scan Meditation"},
+  {name:"Loving-Kindness Meditation",level:"All levels · 10 min",benefit:"Cultivates warmth, compassion and emotional resilience",poses:["Sit comfortably and breathe naturally","Bring to mind someone you care about","Silently wish them: may you be happy, may you be well","Extend the same wishes to yourself","Then to a neutral person, then to all beings","Rest in the feeling of goodwill"],tip:"If self-kindness feels hard, start with someone easy to love and let the warmth spread naturally to yourself.",warn:null,yt:"https://www.youtube.com/results?search_query=loving+kindness+meditation+guided+metta",ytlbl:"Watch Loving-Kindness Meditation"},
+  {name:"Guided Visualisation",level:"Beginner · 10 min",benefit:"Reduces stress by guiding the mind to a place of calm",poses:["Settle comfortably and close your eyes","Picture a peaceful place — beach, forest, mountain","Notice the colours, sounds and warmth there","Let yourself fully arrive in this calm space","Breathe slowly, soaking in the peace","Carry the calm with you as you return"],tip:"The more senses you involve — sound, smell, temperature — the more real and restful it becomes.",warn:null,yt:"https://www.youtube.com/results?search_query=guided+visualization+meditation+relaxation",ytlbl:"Watch Guided Visualisation"},
+  {name:"Mantra Meditation",level:"All levels · 10 to 20 min",benefit:"Quietens mental chatter through gentle repetition",poses:["Choose a calming word or sound (peace, so-hum, om)","Sit comfortably and close your eyes","Silently repeat the mantra with each breath","When the mind wanders, return to the mantra","Let the repetition become effortless","Sit quietly for a moment before opening your eyes"],tip:"The mantra is an anchor, not a chant. Soft, internal repetition is enough to steady a busy mind.",warn:null,yt:"https://www.youtube.com/results?search_query=mantra+meditation+for+beginners+guided",ytlbl:"Watch Mantra Meditation"},
+  {name:"5-Minute Stress Reset",level:"Beginner · 5 min",benefit:"A quick reset for an overwhelming moment, anywhere",poses:["Pause and take one long, slow exhale","Drop your shoulders, unclench your jaw","Breathe in for 4, out for 6, five times","Name one thing you can see, hear and feel","Set one small intention for the next hour","Carry on, a little calmer"],tip:"Perfect between meetings or in a stressful moment — short, discreet, and genuinely effective.",warn:null,yt:"https://www.youtube.com/results?search_query=5+minute+meditation+stress+relief+guided",ytlbl:"Watch 5-Minute Stress Reset"},
+];
+
 const PLANS = [
   {
     id:"free",tier:"Free",price:0,ap:0,fbadge:"Forever Free",
@@ -206,48 +337,38 @@ const PLANS = [
     features:[
       {t:"Daily Vitality Score (morning + evening)",i:true},
       {t:"5 AI wellness messages per day",i:true},
-      {t:"Yoga, breathwork & Tai Chi library",i:true},
-      {t:"Morning & evening ritual guides",i:true},
-      {t:"Daily mood, energy & stress check-in",i:true},
-      {t:"Streak tracking & read-aloud",i:true},
+      {t:"Full yoga, breath, Tai Chi & meditation library",i:true},
+      {t:"Daily morning & evening ritual",i:true},
+      {t:"Mood, energy & stress check-in + streaks",i:true},
       {t:"Unlimited AI coaching",i:false},
-      {t:"AI memory across sessions",i:false},
-      {t:"Progress history & reports",i:false},
+      {t:"AI memory & infinite fresh guidance",i:false},
+      {t:"Progress history, trends & reports",i:false},
     ],
     btn:"outline",cta:"Start Free — No Card"
   },
   {
-    id:"pro",tier:"Pro",price:12.99,ap:7.99,badge:"Most Popular",featured:true,
-    desc:"Your AI wellness companion that knows you personally.",
+    id:"pro",tier:"Pro",price:239,ap:199,fprice:149,fyear:1490,fmonthUsd:9,fyearUsd:90,regUsd:14,badge:"Most Popular",featured:true,
+    desc:"Everything VITÁL offers — your complete AI wellness companion.",
     features:[
       {t:"Everything in Free",i:true},
       {t:"Unlimited AI wellness coaching",i:true},
       {t:"AI remembers your goal & journey",i:true},
-      {t:"Longer, deeper AI guidance",i:true},
+      {t:"Deepest, most detailed AI guidance",i:true},
+      {t:"Ask AI for unlimited fresh exercises & routines",i:true},
       {t:"All 9 wellness modes (incl. Senior & Brain)",i:true},
+      {t:"Choose from all daily ritual themes",i:true},
+      {t:"Longevity & healthy-ageing focus",i:true},
       {t:"Reflection & gratitude journal",i:true},
-      {t:"Priority email support",i:true},
-      {t:"Progress history & trends",i:true},
-      {t:"Weekly AI wellness report",i:true},
+      {t:"Progress history, trends & weekly reports",i:true},
+      {t:"Export health summary for your doctor (CSV)",i:true},
+      {t:"Priority support",i:true},
     ],
     btn:"gold",cta:"Start Pro — 14 Days Free"
   },
-  {
-    id:"elite",tier:"Elite",price:22.99,ap:13.99,
-    desc:"Deep, long-term wellness intelligence that grows with you.",
-    features:[
-      {t:"Everything in Pro",i:true},
-      {t:"Deepest, most detailed AI guidance",i:true},
-      {t:"Longevity & healthy-ageing focus",i:true},
-      {t:"Priority support",i:true},
-      {t:"Full wellness history & trends",i:true},
-      {t:"Weekly AI wellness report",i:true},
-      {t:"Export health summary for your doctor (CSV)",i:true},
-      {t:"Adaptive plans from your history — coming soon",i:false},
-    ],
-    btn:"outline",cta:"Start Elite — 14 Days Free"
-  },
 ];
+
+// Elite plan parked for later (revive when lab analysis / human coaching features are built):
+// { id:"elite", tier:"Elite", price:22.99, ... }
 
 
 const LEGAL = {
@@ -310,6 +431,9 @@ export default function App() {
   const [speaking, setSpeaking] = useState(false);
   const [morningTime, setMorningTime] = useState("5");
   const [eveningTime, setEveningTime] = useState("5");
+  // Daily-rotating ritual themes (null = use today's auto-rotation; number = user's chosen index)
+  const [morningThemePick, setMorningThemePick] = useState(null);
+  const [eveningThemePick, setEveningThemePick] = useState(null);
   const [reflection, setReflection] = useState("");
   const [gratitude, setGratitude] = useState("");
 
@@ -350,10 +474,13 @@ export default function App() {
   });
   const [report, setReport] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+  const [installEvent, setInstallEvent] = useState(null);
+  const [showInstall, setShowInstall] = useState(false);
 
   // ─── DERIVED ───
   const isPro = userPlan === "pro" || userPlan === "elite";
-  const isElite = userPlan === "elite";
+  // Elite is parked; all its features are now in Pro, so isElite-gated features work for Pro subscribers
+  const isElite = isPro;
   const canChat = isPro || dailyMsgCount < FREE_DAILY_LIMIT;
   const remainingFree = Math.max(0, FREE_DAILY_LIMIT - dailyMsgCount);
   const vitalityScore = useMemo(() => {
@@ -361,8 +488,48 @@ export default function App() {
     return Math.min(100, Math.round((raw / 234) * 100));
   }, [profile]);
 
+  // ─── PWA INSTALL PROMPT ───
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallEvent(e);
+      // Show our install banner only if not already installed/dismissed this session
+      try {
+        const dismissed = localStorage.getItem("v10installDismissed");
+        const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+        if (!dismissed && !isStandalone) setShowInstall(true);
+      } catch { setShowInstall(true); }
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const triggerInstall = async () => {
+    if (!installEvent) { setShowInstall(false); return; }
+    installEvent.prompt();
+    try { await installEvent.userChoice; } catch {}
+    setInstallEvent(null);
+    setShowInstall(false);
+  };
+  const dismissInstall = () => {
+    setShowInstall(false);
+    try { localStorage.setItem("v10installDismissed", "y"); } catch {}
+  };
+
+  // Day index for daily rotation — same for everyone on a given date, changes each day
+  const dayIndex = () => {
+    const d = new Date();
+    const start = new Date(d.getFullYear(), 0, 0);
+    return Math.floor((d - start) / 86400000);
+  };
+  // Resolve which theme to show: user's pick if chosen, else today's auto-rotation
+  const morningTheme = MORNING_THEMES[morningThemePick != null ? morningThemePick : dayIndex() % MORNING_THEMES.length];
+  const eveningTheme = EVENING_THEMES[eveningThemePick != null ? eveningThemePick : dayIndex() % EVENING_THEMES.length];
+
   // ─── HELPERS ───
   const go = (p) => { setPage(p); window.scrollTo(0, 0); };
+  // Safe analytics event tracker — never breaks the app if analytics fails
+  const ev = (name, data) => { try { track(name, data); } catch {} };
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(""), 3000); };
 
   // Date key helpers
@@ -503,6 +670,53 @@ export default function App() {
     }
   };
 
+  // Full backup — download ALL app data as a JSON file (every user, never lose data)
+  const backupData = () => {
+    try {
+      const data = {
+        version: "v10",
+        exported: new Date().toISOString(),
+        goal: wellnessGoal,
+        plan: userPlan,
+        streak, lastCheckin,
+        dailyLog,
+        memories,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "vital-backup-" + todayKey() + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("\u2713 Backup downloaded — keep it safe");
+    } catch {
+      showToast("Could not create backup. Please try again.");
+    }
+  };
+
+  // Restore from a backup file
+  const restoreData = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const d = JSON.parse(ev.target.result);
+        if (d.dailyLog) { setDailyLog(d.dailyLog); try { localStorage.setItem("v10log", JSON.stringify(d.dailyLog)); } catch {} }
+        if (d.memories) { setMemories(d.memories); try { localStorage.setItem("v10mem", JSON.stringify(d.memories)); } catch {} }
+        if (d.goal) { setWellnessGoal(d.goal); try { localStorage.setItem("v10goal", d.goal); } catch {} }
+        if (typeof d.streak === "number") { setStreak(d.streak); try { localStorage.setItem("v10streak", String(d.streak)); } catch {} }
+        if (d.lastCheckin) { setLastCheckin(d.lastCheckin); try { localStorage.setItem("v10last", d.lastCheckin); } catch {} }
+        showToast("\u2713 Backup restored successfully");
+      } catch {
+        showToast("Could not read that file. Make sure it's a VIT\u00c1L backup.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const deleteAccount = () => {
     if (!window.confirm("Delete all your VITÁL data permanently? This cannot be undone.")) return;
     try { ["v10","v10onb","v10goal","v10plan","v10msg","v10streak","v10last","v10log","v10mem"].forEach(k => localStorage.removeItem(k)); } catch {}
@@ -511,8 +725,12 @@ export default function App() {
   };
 
   const selectPlan = (id) => {
-    if (id === "free") { go("morning"); return; }
-    const link = PAYSTACK[id + (annual ? "_annual" : "_monthly")];
+    if (id === "free") { ev("plan_selected", { plan: "free" }); go("morning"); return; }
+    const billing = annual ? "annual" : "monthly";
+    ev("checkout_started", { plan: id, billing, founder: FOUNDER_MODE });
+    // During founder mode, send buyers to the founder-priced links; otherwise regular
+    const prefix = FOUNDER_MODE ? "founder" : "pro";
+    const link = PAYSTACK[prefix + (annual ? "_annual" : "_monthly")];
     if (link) window.open(link, "_blank");
   };
 
@@ -520,10 +738,11 @@ export default function App() {
   const sendChat = async (txt) => {
     const m = (txt || inp).trim();
     if (!m || aiLoading) return;
-    if (!canChat) { setShowUpgrade(true); return; }
+    if (!canChat) { ev("paywall_shown", { reason: "daily_limit" }); setShowUpgrade(true); return; }
 
     setInp("");
     setMsgs(p => [...p, { role: "user", text: m }]);
+    ev("ai_message_sent", { mode: aiMode, plan: userPlan });
     setAiLoading(true);
     if (!isPro) incrementMsg();
     updateStreak();
@@ -616,7 +835,7 @@ export default function App() {
               <div className="gate-chk-txt">I understand VITÁL provides general wellness information only — not medical advice. I will continue all prescribed medications and follow my doctor's guidance. I agree to the Terms, Privacy Policy, and Health Disclaimer.</div>
             </div>
             <button className="btn btn-gold" style={{width:"100%",padding:"14px"}} disabled={!checked}
-              onClick={() => { try { localStorage.setItem("v10","y"); } catch {} setAccepted(true); }}>
+              onClick={() => { try { localStorage.setItem("v10","y"); } catch {} ev("disclaimer_accepted"); setAccepted(true); }}>
               I Understand — Enter VITÁL
             </button>
           </div>
@@ -652,7 +871,7 @@ export default function App() {
               ))}
             </div>
             <button className="btn btn-gold" style={{width:"100%",padding:"14px",fontSize:15}} disabled={!wellnessGoal}
-              onClick={() => { try { localStorage.setItem("v10onb","y"); localStorage.setItem("v10goal",wellnessGoal); } catch {} setOnboarded(true); showToast("✨ Welcome to your VITÁL journey"); }}>
+              onClick={() => { try { localStorage.setItem("v10onb","y"); localStorage.setItem("v10goal",wellnessGoal); } catch {} ev("signup_completed", { goal: wellnessGoal }); setOnboarded(true); showToast("✨ Welcome to your VITÁL journey"); }}>
               Begin My Journey →
             </button>
             <p className="body-sm" style={{textAlign:"center",marginTop:10}}>You can change this anytime in Profile</p>
@@ -681,7 +900,7 @@ export default function App() {
             <div style={{display:"flex",alignItems:"center",gap:4,background:"var(--gold-bg)",border:"1px solid var(--gb)",borderRadius:20,padding:"4px 10px",fontSize:12,color:"var(--gold-dark)",fontWeight:700}}>🔥 {streak}</div>
           )}
           {isPro ? (
-            <div style={{background:"var(--gold)",borderRadius:20,padding:"4px 12px",fontSize:11,color:"#0A0A0A",fontWeight:700,letterSpacing:1}}>{isElite ? "ELITE" : "PRO"} ✦</div>
+            <div style={{background:"var(--gold)",borderRadius:20,padding:"4px 12px",fontSize:11,color:"#0A0A0A",fontWeight:700,letterSpacing:1}}>PRO ✦</div>
           ) : (
             <button className="btn btn-gold btn-sm" onClick={() => go("pricing")}>Get Pro</button>
           )}
@@ -691,6 +910,21 @@ export default function App() {
       {/* TOAST */}
       {toast && (
         <div style={{position:"fixed",top:78,left:"50%",transform:"translateX(-50%)",background:"var(--surface)",border:"1.5px solid var(--gold)",borderRadius:"var(--r2)",padding:"11px 20px",fontSize:13,fontWeight:600,color:"var(--text)",zIndex:500,boxShadow:"var(--shadow2)",maxWidth:"90vw",textAlign:"center"}}>{toast}</div>
+      )}
+
+      {/* INSTALL BANNER */}
+      {showInstall && (
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:600,background:"var(--surface)",borderTop:"2px solid var(--gold)",boxShadow:"0 -4px 20px rgba(0,0,0,.15)",padding:"14px 18px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <img src="/icon-192.png" alt="VITÁL" style={{width:42,height:42,borderRadius:10,flexShrink:0}} />
+          <div style={{flex:1,minWidth:140}}>
+            <div style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>Install VITÁL</div>
+            <div style={{fontSize:12,color:"var(--text3)",fontWeight:500}}>Add to your home screen for instant access</div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-gold btn-sm" onClick={() => triggerInstall()}>Install</button>
+            <button onClick={() => dismissInstall()} style={{background:"none",border:"none",color:"var(--text3)",fontSize:13,cursor:"pointer",fontWeight:600,padding:"0 6px"}}>Not now</button>
+          </div>
+        </div>
       )}
 
       {/* HOME */}
@@ -756,16 +990,35 @@ export default function App() {
           <div className="lbl">Morning Ritual</div>
           <h2 className="h2" style={{marginBottom:18}}>Begin with <em>intention</em>.</h2>
           <p className="body-text" style={{marginBottom:24,maxWidth:600}}>A gentle start to your day. Choose how much time you have.</p>
-          <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
             {[["2","2 min"],["5","5 min"],["10","10 min"],["20","20+ min"]].map(([v,l]) => (
               <button key={v} onClick={() => setMorningTime(v)} className={"btn " + (morningTime === v ? "btn-gold" : "btn-outline") + " btn-sm"} style={{minWidth:78}}>{l}</button>
             ))}
           </div>
-          {MORNING_ROUTINES[morningTime] && (
+
+          {/* Theme picker — today's theme pre-selected; choosing alternatives is a Pro feature */}
+          <div className="lbl" style={{marginBottom:8}}>Today's Practice {!isPro && <span style={{color:"var(--text3)",fontWeight:600,textTransform:"none",letterSpacing:0}}>· fresh theme daily</span>}</div>
+          <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6,marginBottom:18,scrollbarWidth:"none"}}>
+            {MORNING_THEMES.map((t, i) => {
+              const active = (morningThemePick != null ? morningThemePick : dayIndex() % MORNING_THEMES.length) === i;
+              const locked = !isPro && !active;
+              return (
+                <button key={t.id} onClick={() => { if (locked) { ev("paywall_shown", { reason: "ritual_themes" }); go("pricing"); return; } setMorningThemePick(i); }}
+                  style={{whiteSpace:"nowrap",flexShrink:0,padding:"10px 16px",borderRadius:"var(--r2)",cursor:"pointer",textAlign:"left",opacity: locked ? 0.55 : 1,
+                    border: active ? "2px solid var(--gold)" : "1.5px solid var(--border)",
+                    background: active ? "var(--gold-bg)" : "var(--surface)"}}>
+                  <div style={{fontSize:14,fontWeight:700,color: active ? "var(--gold-dark)" : "var(--text)"}}>{t.icon} {t.name} {locked && "🔒"}</div>
+                  <div style={{fontSize:11,color:"var(--text3)",fontWeight:600}}>{t.blurb}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {morningTheme.times[morningTime] && (
             <div className="card-gold" style={{marginBottom:20}}>
-              <div className="lbl">Your Practice</div>
+              <div className="lbl">{morningTheme.icon} {morningTheme.name}</div>
               <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:10}}>
-                {MORNING_ROUTINES[morningTime].map((step, i) => (
+                {morningTheme.times[morningTime].map((step, i) => (
                   <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
                     <div style={{fontSize:24}}>{step.icon}</div>
                     <div>
@@ -775,7 +1028,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <button className="btn btn-gold" style={{marginTop:18,width:"100%",background: morningDone ? "var(--green)" : "var(--gold)",color: morningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (morningDone) return; updateStreak(); setMorningDone(true); logToday({ morning: true }); showToast("✨ Morning ritual complete! 🔥 Streak updated."); }}>{morningDone ? "✓ Completed Today" : "Complete Ritual"}</button>
+              <button className="btn btn-gold" style={{marginTop:18,width:"100%",background: morningDone ? "var(--green)" : "var(--gold)",color: morningDone ? "#fff" : "#0A0A0A"}} onClick={() => { if (morningDone) return; updateStreak(); setMorningDone(true); logToday({ morning: true }); ev("ritual_completed", { type: "morning", theme: morningTheme.id }); showToast("✨ Morning ritual complete! 🔥 Streak updated."); }}>{morningDone ? "✓ Completed Today" : "Complete Ritual"}</button>
               {morningDone && (
                 <div style={{marginTop:14,padding:"14px 16px",background:"var(--green-bg)",border:"1px solid var(--green)",borderRadius:"var(--r2)",textAlign:"center"}}>
                   <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:8}}>Beautiful start to your day 🌿</div>
@@ -797,16 +1050,35 @@ export default function App() {
         <div className="page"><div className="wrap"><div className="section">
           <div className="lbl">Evening Wind-Down</div>
           <h2 className="h2" style={{marginBottom:18}}>Release the day. <em>Rest deeply.</em></h2>
-          <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
             {[["2","2 min"],["5","5 min"],["10","10 min"],["20","20+ min"]].map(([v,l]) => (
               <button key={v} onClick={() => setEveningTime(v)} className={"btn " + (eveningTime === v ? "btn-gold" : "btn-outline") + " btn-sm"} style={{minWidth:78}}>{l}</button>
             ))}
           </div>
-          {EVENING_ROUTINES[eveningTime] && (
+
+          {/* Theme picker — today's theme pre-selected; choosing alternatives is a Pro feature */}
+          <div className="lbl" style={{marginBottom:8}}>Tonight's Practice {!isPro && <span style={{color:"var(--text3)",fontWeight:600,textTransform:"none",letterSpacing:0}}>· fresh theme daily</span>}</div>
+          <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6,marginBottom:18,scrollbarWidth:"none"}}>
+            {EVENING_THEMES.map((t, i) => {
+              const active = (eveningThemePick != null ? eveningThemePick : dayIndex() % EVENING_THEMES.length) === i;
+              const locked = !isPro && !active;
+              return (
+                <button key={t.id} onClick={() => { if (locked) { ev("paywall_shown", { reason: "ritual_themes" }); go("pricing"); return; } setEveningThemePick(i); }}
+                  style={{whiteSpace:"nowrap",flexShrink:0,padding:"10px 16px",borderRadius:"var(--r2)",cursor:"pointer",textAlign:"left",opacity: locked ? 0.55 : 1,
+                    border: active ? "2px solid var(--gold)" : "1.5px solid var(--border)",
+                    background: active ? "var(--gold-bg)" : "var(--surface)"}}>
+                  <div style={{fontSize:14,fontWeight:700,color: active ? "var(--gold-dark)" : "var(--text)"}}>{t.icon} {t.name} {locked && "🔒"}</div>
+                  <div style={{fontSize:11,color:"var(--text3)",fontWeight:600}}>{t.blurb}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {eveningTheme.times[eveningTime] && (
             <div className="card-gold" style={{marginBottom:20}}>
-              <div className="lbl">Your Practice</div>
+              <div className="lbl">{eveningTheme.icon} {eveningTheme.name}</div>
               <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:10}}>
-                {EVENING_ROUTINES[eveningTime].map((step, i) => (
+                {eveningTheme.times[eveningTime].map((step, i) => (
                   <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
                     <div style={{fontSize:24}}>{step.icon}</div>
                     <div>
@@ -871,6 +1143,16 @@ export default function App() {
             {aiLoading && <div style={{alignSelf:"flex-start",color:"var(--text3)",fontSize:14,padding:"10px 16px"}}><span style={{animation:"pulse 1.5s infinite"}}>● ● ●</span></div>}
             <div ref={endRef} />
           </div>
+          {msgs.length <= 1 && AI_SUGGESTIONS[aiMode] && (
+            <div style={{display:"flex",gap:8,overflowX:"auto",padding:"10px 14px 2px",background:"var(--bg)",scrollbarWidth:"none"}}>
+              {AI_SUGGESTIONS[aiMode].map((s, i) => (
+                <button key={i} onClick={() => { ev("suggestion_tapped", { mode: aiMode }); sendChat(s); }} disabled={!canChat || aiLoading}
+                  style={{whiteSpace:"nowrap",padding:"8px 14px",border:"1.5px solid var(--gb)",background:"var(--surface)",color:"var(--gold-dark)",borderRadius:20,fontSize:13,fontWeight:600,cursor:"pointer",flexShrink:0}}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{padding:"10px 14px 14px",borderTop:"1px solid var(--border)",background:"var(--surface)",display:"flex",gap:8}}>
             <input className="input" value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder={canChat ? "Ask anything wellness..." : "Upgrade to continue"} disabled={!canChat || aiLoading} style={{flex:1,borderRadius:24}} />
             <button onClick={() => sendChat()} disabled={!canChat || aiLoading || !inp.trim()} className="btn btn-gold" style={{padding:"11px 20px"}}>Send</button>
@@ -884,12 +1166,27 @@ export default function App() {
           <div className="lbl">Practice Library</div>
           <h2 className="h2" style={{marginBottom:18}}>Wisdom in <em>movement</em>.</h2>
           <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
-            {[["yoga","🧘 Yoga"],["breathing","🫁 Breathwork"],["taichi","🌊 Tai Chi"]].map(([v,l]) => (
+            {[["yoga","🧘 Yoga"],["breathing","🫁 Breathwork"],["taichi","🌊 Tai Chi"],["meditation","🧠 Meditation"]].map(([v,l]) => (
               <button key={v} onClick={() => setExCat(v)} className={"btn " + (exCat === v ? "btn-gold" : "btn-outline") + " btn-sm"}>{l}</button>
             ))}
           </div>
+
+          {/* Infinite content via AI — the real reason static guides never run out */}
+          <div className={isPro ? "card-gold" : "card"} style={{marginBottom:18,display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+            <div style={{fontSize:30}}>✨</div>
+            <div style={{flex:1,minWidth:180}}>
+              <div style={{fontWeight:700,color:"var(--text)",fontSize:15,marginBottom:2}}>{isPro ? "Want something different?" : "Never run out of practices"}</div>
+              <div className="body-sm">{isPro ? "Ask your AI Coach for a fresh routine tailored to exactly how you feel right now — unlimited variations." : "Pro members can ask the AI Coach for unlimited fresh routines, personalised to their body, mood and goals. The library never runs dry."}</div>
+            </div>
+            {isPro ? (
+              <button className="btn btn-gold btn-sm" onClick={() => { ev("ai_alternatives_used", { cat: exCat }); setAiMode(exCat === "breathing" ? "breathing" : exCat === "meditation" ? "meditation" : exCat === "taichi" ? "wellness" : "yoga"); setMsgs([INIT_MSG]); setInp("Give me a fresh " + exCat + " routine that's different from the usual — tailored to how I feel today."); go("coach"); }}>Ask AI for a fresh routine</button>
+            ) : (
+              <button className="btn btn-gold btn-sm" onClick={() => { ev("paywall_shown", { reason: "ai_alternatives" }); go("pricing"); }}>Unlock with Pro</button>
+            )}
+          </div>
+
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
-            {(exCat === "yoga" ? YOGA_DATA : exCat === "breathing" ? BREATH_DATA : TAICHI_DATA).map((ex, i) => (
+            {(exCat === "yoga" ? YOGA_DATA : exCat === "breathing" ? BREATH_DATA : exCat === "taichi" ? TAICHI_DATA : MEDITATION_DATA).map((ex, i) => (
               <div key={i} className="card" style={{cursor:"pointer"}} onClick={() => setExDetail(ex)}>
                 <h3 className="h3" style={{fontSize:18,marginBottom:6}}>{ex.name}</h3>
                 <div style={{fontSize:12,color:"var(--gold-dark)",marginBottom:8,fontWeight:700}}>{ex.level}</div>
@@ -923,6 +1220,12 @@ export default function App() {
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               <button className="readaloud" onClick={() => speak((exDetail.benefit || exDetail.science || "") + ". " + (exDetail.poses || exDetail.steps || []).join(". "))}>🔊 {speaking ? "Stop" : "Read Guide Aloud"}</button>
               <button className="btn btn-outline btn-sm" onClick={() => { setExDetail(null); go("coach"); }}>🌿 Ask AI Coach</button>
+              {exDetail.yt && (
+                <a href={exDetail.yt} target="_blank" rel="noopener noreferrer" onClick={() => ev("youtube_opened", { exercise: exDetail.name })}
+                  style={{display:"inline-flex",alignItems:"center",gap:6,background:"#FF0000",color:"#fff",borderRadius:"var(--r1)",padding:"9px 16px",fontSize:13,fontWeight:700,textDecoration:"none"}}>
+                  ▶ {exDetail.ytlbl || "Watch on YouTube"}
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -1095,7 +1398,20 @@ export default function App() {
           <button className="btn btn-gold" style={{width:"100%",padding:14,marginBottom:24}} onClick={() => { setProfileSaved(true); logToday({ mood: profile.mood, energy: profile.energy, stress: profile.stress, sleep: profile.sleep_hours, water: profile.water }); showToast("✓ Saved — today's check-in logged"); setTimeout(() => go("home"), 1100); }}>Save Profile</button>
           <div style={{paddingTop:24,borderTop:"1px solid var(--border)"}}>
             <div className="lbl">Account</div>
-            <div style={{marginTop:12,display:"flex",gap:16,flexWrap:"wrap"}}>
+
+            <div style={{marginTop:12,marginBottom:16,padding:"16px",background:"var(--surface2)",borderRadius:"var(--r2)"}}>
+              <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:6}}>Never lose your data</div>
+              <p className="body-sm" style={{marginBottom:12}}>Your history is saved on this device. Back it up to a file so you can keep it forever or move it to a new phone.</p>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button className="btn btn-gold btn-sm" onClick={() => backupData()}>⬇ Back up my data</button>
+                <label className="btn btn-outline btn-sm" style={{cursor:"pointer"}}>
+                  ⬆ Restore from backup
+                  <input type="file" accept="application/json,.json" style={{display:"none"}} onChange={e => { restoreData(e.target.files[0]); e.target.value = ""; }} />
+                </label>
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
               <button onClick={() => setModal("privacy")} style={{background:"none",border:"none",color:"var(--text3)",fontSize:13,cursor:"pointer",fontWeight:600}}>Privacy Policy</button>
               <button onClick={() => setModal("terms")} style={{background:"none",border:"none",color:"var(--text3)",fontSize:13,cursor:"pointer",fontWeight:600}}>Terms of Service</button>
               <button onClick={() => setModal("disclaimer")} style={{background:"none",border:"none",color:"var(--text3)",fontSize:13,cursor:"pointer",fontWeight:600}}>Medical Disclaimer</button>
@@ -1107,7 +1423,7 @@ export default function App() {
               <div className="lbl">🔧 Test Mode (founder only)</div>
               <p className="body-sm" style={{marginBottom:10}}>Switch your plan to preview paid features.</p>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {[["free","Free"],["pro","Pro"],["elite","Elite"]].map(([id,l]) => (
+                {[["free","Free"],["pro","Pro"]].map(([id,l]) => (
                   <button key={id} onClick={() => { setUserPlan(id); try { localStorage.setItem("v10plan", id); } catch {} showToast("Plan set to " + l + " (test)"); }}
                     className={"btn " + (userPlan === id ? "btn-gold" : "btn-outline") + " btn-sm"}>{l}</button>
                 ))}
@@ -1124,18 +1440,41 @@ export default function App() {
         <div className="page"><div className="wrap"><div className="section">
           <div className="lbl" style={{textAlign:"center"}}>Pricing</div>
           <h2 className="h2" style={{textAlign:"center",marginBottom:14}}>Start free. <em>Scale when ready.</em></h2>
+          {FOUNDER_MODE && (
+            <div style={{maxWidth:560,margin:"0 auto 24px",background:"var(--gold-bg)",border:"1.5px solid var(--gold)",borderRadius:"var(--r3)",padding:"16px 20px",textAlign:"center"}}>
+              <div style={{fontSize:13,fontWeight:700,color:"var(--gold-dark)",letterSpacing:".04em",marginBottom:6}}>🌟 FOUNDING MEMBER OFFER — FIRST {FOUNDER_SPOTS} ONLY</div>
+              <p className="body-sm" style={{color:"var(--text2)"}}>Lock in founder pricing <strong>forever</strong>. As we add new features, the price rises for future members — but never for you. Our thank-you for believing early.</p>
+            </div>
+          )}
           <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:30}}>
             <button onClick={() => setAnnual(false)} className={"btn " + (!annual ? "btn-gold" : "btn-outline") + " btn-sm"}>Monthly</button>
-            <button onClick={() => setAnnual(true)} className={"btn " + (annual ? "btn-gold" : "btn-outline") + " btn-sm"}>Annual · Save 30%</button>
+            <button onClick={() => setAnnual(true)} className={"btn " + (annual ? "btn-gold" : "btn-outline") + " btn-sm"}>Annual · Best Value</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}>
             {PLANS.map(plan => (
               <div key={plan.id} className={plan.featured ? "card-gold" : "card"} style={{position:"relative",border: plan.featured ? "2px solid var(--gold)" : undefined}}>
                 {plan.badge && <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",background:"var(--gold)",color:"#0A0A0A",fontSize:10,padding:"3px 12px",borderRadius:12,fontWeight:700}}>{plan.badge}</div>}
+                {FOUNDER_MODE && plan.fprice && <div style={{background:"var(--gold-dark)",color:"#fff",fontSize:10,padding:"3px 10px",borderRadius:10,display:"inline-block",fontWeight:700,marginBottom:8,letterSpacing:".03em"}}>🌟 FOUNDER PRICE</div>}
                 {plan.fbadge && <div style={{background:"var(--green-bg)",color:"var(--green)",fontSize:10,padding:"3px 10px",borderRadius:10,display:"inline-block",fontWeight:700,marginBottom:8}}>{plan.fbadge}</div>}
                 <h3 className="h3" style={{marginBottom:6}}>{plan.tier}</h3>
-                <div style={{fontSize:32,fontFamily:"var(--fd)",fontWeight:500,color:"var(--text)",marginBottom:4}}>${annual ? plan.ap : plan.price}<span style={{fontSize:13,color:"var(--text3)",fontWeight:600}}>/mo</span></div>
-                {annual && plan.ap > 0 && <div style={{fontSize:11,color:"var(--green)",marginBottom:10,fontWeight:700}}>billed annually</div>}
+                {FOUNDER_MODE && plan.fprice ? (
+                  <>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:2,flexWrap:"wrap"}}>
+                      <span style={{fontSize:30,fontFamily:"var(--fd)",fontWeight:500,color:"var(--text)"}}>R{annual ? plan.fyear : plan.fprice}<span style={{fontSize:13,color:"var(--text3)",fontWeight:600}}>{annual ? "/yr" : "/mo"}</span></span>
+                      <span style={{fontSize:13,color:"var(--text3)",fontWeight:600}}>±${annual ? plan.fyearUsd : plan.fmonthUsd}</span>
+                      <span style={{fontSize:15,color:"var(--text3)",fontWeight:600,textDecoration:"line-through"}}>R{annual ? plan.ap * 12 : plan.price}</span>
+                    </div>
+                    <div style={{fontSize:11,color:"var(--gold-dark)",marginBottom:10,fontWeight:700}}>{annual ? "≈ R" + Math.round(plan.fyear/12) + "/mo — locked forever" : "Founder rate — locked forever"}</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                      <span style={{fontSize:30,fontFamily:"var(--fd)",fontWeight:500,color:"var(--text)"}}>{plan.price === 0 ? "Free" : "R" + (annual ? plan.ap : plan.price)}{plan.price > 0 && <span style={{fontSize:13,color:"var(--text3)",fontWeight:600}}>/mo</span>}</span>
+                      {plan.regUsd > 0 && <span style={{fontSize:13,color:"var(--text3)",fontWeight:600}}>±${plan.regUsd}</span>}
+                    </div>
+                    {annual && plan.ap > 0 && <div style={{fontSize:11,color:"var(--green)",marginBottom:10,fontWeight:700}}>billed annually</div>}
+                  </>
+                )}
                 <p className="body-sm" style={{marginBottom:16}}>{plan.desc}</p>
                 <div style={{height:1,background:"var(--border)",margin:"14px 0"}} />
                 <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
@@ -1151,6 +1490,7 @@ export default function App() {
             ))}
           </div>
           <p className="body-sm" style={{textAlign:"center",marginTop:24}}>Cancel anytime · Secure payment via Paystack · Receipts emailed automatically</p>
+          <p className="body-sm" style={{textAlign:"center",marginTop:6,fontSize:12}}>Billed in South African Rand (ZAR). USD shown (±) is approximate.</p>
         </div></div></div>
       )}
 
@@ -1162,14 +1502,22 @@ export default function App() {
             <h3 className="h3" style={{color:"var(--gold-dark)",marginBottom:10}}>Daily Limit Reached</h3>
             <p className="body-text" style={{marginBottom:20}}>You've used your {FREE_DAILY_LIMIT} free AI messages today. Upgrade to Pro for unlimited coaching.</p>
             <div style={{background:"var(--gold-bg)",borderRadius:"var(--r2)",padding:16,marginBottom:18,border:"1px solid var(--gb)"}}>
-              <div style={{color:"var(--gold-dark)",fontSize:16,fontWeight:700,marginBottom:10}}>Pro — $12.99/month</div>
+              {FOUNDER_MODE ? (
+                <div style={{color:"var(--gold-dark)",fontSize:16,fontWeight:700,marginBottom:10}}>
+                  <div style={{fontSize:10,letterSpacing:".04em",marginBottom:4}}>🌟 FOUNDING MEMBER — FIRST {FOUNDER_SPOTS}</div>
+                  Pro — R149<span style={{fontSize:13,fontWeight:600}}>/mo</span> <span style={{fontSize:12,color:"var(--text3)",fontWeight:600}}>±$9</span> <span style={{fontSize:13,textDecoration:"line-through",color:"var(--text3)",fontWeight:600}}>R239</span>
+                  <div style={{fontSize:11,fontWeight:600,color:"var(--text3)",marginTop:2}}>Locked forever — price rises later for new members</div>
+                </div>
+              ) : (
+                <div style={{color:"var(--gold-dark)",fontSize:16,fontWeight:700,marginBottom:10}}>Pro — R239/month <span style={{fontSize:12,color:"var(--text3)",fontWeight:600}}>±$14</span></div>
+              )}
               <div style={{display:"flex",flexDirection:"column",gap:6,fontSize:13,textAlign:"left"}}>
                 {["Unlimited AI coaching","AI remembers your journey","Longer, deeper responses","All 9 wellness modes"].map(f => (
                   <div key={f} style={{display:"flex",gap:8,color:"var(--text2)",fontWeight:600}}><span style={{color:"var(--green)",fontWeight:700}}>✓</span> {f}</div>
                 ))}
               </div>
             </div>
-            <button className="btn btn-gold" style={{width:"100%",padding:13,marginBottom:10}} onClick={() => { setShowUpgrade(false); window.open(PAYSTACK.pro_monthly, "_blank"); }}>Upgrade to Pro Now</button>
+            <button className="btn btn-gold" style={{width:"100%",padding:13,marginBottom:10}} onClick={() => { ev("checkout_started", { plan: "pro", billing: "monthly", from: "paywall_modal", founder: FOUNDER_MODE }); setShowUpgrade(false); window.open(FOUNDER_MODE ? PAYSTACK.founder_monthly : PAYSTACK.pro_monthly, "_blank"); }}>{FOUNDER_MODE ? "Claim Founder Price — R149/mo" : "Upgrade to Pro Now"}</button>
             <button onClick={() => setShowUpgrade(false)} style={{background:"none",border:"none",color:"var(--text3)",fontSize:13,cursor:"pointer",fontWeight:600}}>Continue with free plan</button>
           </div>
         </div>
