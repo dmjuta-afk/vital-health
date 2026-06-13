@@ -1,6 +1,16 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { track } from "@vercel/analytics";
 
+// ─── POSTHOG ANALYTICS ─── (free funnel events; this key is write-only & safe in public code)
+if (typeof window !== "undefined" && !window.__vitalPostHog) {
+  window.__vitalPostHog = true;
+  try {
+    const phs = document.createElement("script");
+    phs.textContent = `!function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="rn sn init kn Qr wn Cn yn capture calculateEventProperties Rn register register_once register_for_session unregister unregister_for_session An getFeatureFlag getFeatureFlagPayload getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync Fn identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset setIdentity clearIdentity get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException addExceptionStep captureLog startExceptionAutocapture stopExceptionAutocapture loadToolbar get_property getSessionProperty On En createPersonProfile setInternalOrTestUser Ln gn $n opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing In debug Kr Pn getPageViewId captureTraceFeedback captureTraceMetric vn".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);posthog.init("phc_kDCUBZYuFnUrAAETf3JNHUwebQtzCfdtcRBijMmt8Q5M",{api_host:"https://us.i.posthog.com",defaults:"2026-05-30",person_profiles:"identified_only",disable_session_recording:true});`;
+    document.head.appendChild(phs);
+  } catch {}
+}
+
 /* ═══════════════════════════════════════════════════════════════
    VITÁL v10 — AI Wellness Companion · ABC UP PTY LTD © 2026
    Light theme · Bold black text · All features · Built to last
@@ -330,6 +340,15 @@ const MEDITATION_DATA = [
   {name:"5-Minute Stress Reset",level:"Beginner · 5 min",benefit:"A quick reset for an overwhelming moment, anywhere",poses:["Pause and take one long, slow exhale","Drop your shoulders, unclench your jaw","Breathe in for 4, out for 6, five times","Name one thing you can see, hear and feel","Set one small intention for the next hour","Carry on, a little calmer"],tip:"Perfect between meetings or in a stressful moment — short, discreet, and genuinely effective.",warn:null,yt:"https://www.youtube.com/results?search_query=5+minute+meditation+stress+relief+guided",ytlbl:"Watch 5-Minute Stress Reset"},
 ];
 
+const CARDIO_DATA = [
+  {name:"The VITÁL 25 Circuit",level:"Intermediate · 5 to 8 min",benefit:"Full-body strength and cardio in one quick, equipment-free circuit",poses:["Warm up: 30 seconds marching on the spot, arm circles","25 squats — feet shoulder-width, sit back, chest up","25 press-ups — full, on knees, or against a wall","25 lunges — alternating legs, knee tracking over toes","Rest 60 seconds, breathe slowly","Optional: repeat the circuit once more if you feel strong"],tip:"Quality beats speed. Slow, controlled reps build more strength and protect your joints. If 25 is too many today, do what you can — see the Build-Up circuit.",warn:"Stop if you feel sharp pain, dizziness or chest discomfort. New to exercise or have a health condition? Check with your doctor first.",yt:"https://www.youtube.com/results?search_query=bodyweight+circuit+squats+pushups+lunges+beginner+form",ytlbl:"Watch circuit form guides"},
+  {name:"Build-Up to 25",level:"Beginner · 5 min",benefit:"The same circuit, scaled — build gradually from 5 reps to the full 25",poses:["Week 1: 5 squats, 5 wall press-ups, 5 lunges — daily","Week 2: 10 of each, rest as needed between moves","Week 3: 15 of each — press-ups on knees if wall feels easy","Week 4: 20 of each, focus on smooth controlled form","Week 5: the full 25 Circuit — you earned it","Progress at your own pace; repeat a week any time"],tip:"Consistency beats intensity. Five perfect reps daily will take you further than 25 painful ones once a week.",warn:"Build gradually — muscle soreness is normal, joint pain is not. Ease off if pain persists.",yt:"https://www.youtube.com/results?search_query=beginner+bodyweight+workout+progression+no+equipment",ytlbl:"Watch beginner progressions"},
+  {name:"5-Minute Morning Energiser",level:"All levels · 5 min",benefit:"Raises heart rate and energy without equipment — better than coffee",poses:["1 min: march or jog on the spot, swing the arms","1 min: 20 jumping jacks (or step-jacks, low impact)","1 min: 15 squats, steady pace","1 min: high knees or brisk marching","1 min: slow stretch — reach up tall, gentle forward fold","Shake it out. Drink water. Go own the day."],tip:"Do this before checking your phone in the morning — movement first changes the whole day's energy.",warn:"Keep impact low (step instead of jump) if you have joint concerns.",yt:"https://www.youtube.com/results?search_query=5+minute+morning+workout+no+equipment+energizing",ytlbl:"Watch morning energisers"},
+  {name:"Gentle Strength (Low-Impact)",level:"Gentle · 8 min · Joint-friendly & 60+",benefit:"Builds practical, everyday strength with zero jumping or floor work",poses:["10 sit-to-stands from a sturdy chair (the most useful exercise there is)","10 wall press-ups — hands on wall, body straight","10 counter-top calf raises, slow up and down","10 standing knee lifts each side, hold a chair for balance","30-second gentle wall sit (or skip)","Finish: shoulder rolls and a slow, tall stretch"],tip:"Strength is the closest thing we have to an anti-ageing medicine — and the chair sit-to-stand is its king. A little, daily, changes everything.",warn:"Hold a stable support for balance moves. Stop if anything causes sharp pain.",yt:"https://www.youtube.com/results?search_query=gentle+strength+exercises+seniors+low+impact+home",ytlbl:"Watch gentle strength guides"},
+  {name:"Core Foundations",level:"Beginner · 6 min",benefit:"A stable core supports your back, posture and every other movement",poses:["30-second plank — on knees is perfectly valid","15 glute bridges — squeeze at the top, lower slowly","10 dead bugs each side — lower back stays pressed down","20-second side plank each side (knees down to scale)","15 slow standing torso twists","Rest, breathe, repeat once if you like"],tip:"A strong core is built with control, not speed. If your back arches or strains, scale the move down — that's wisdom, not weakness.",warn:"Skip or modify if you have back issues, and keep movements pain-free.",yt:"https://www.youtube.com/results?search_query=beginner+core+workout+plank+glute+bridge+form",ytlbl:"Watch core form guides"},
+  {name:"7-Minute Full Body",level:"Intermediate · 7 min",benefit:"The classic science-backed circuit — maximum effect, minimum time",poses:["30 seconds each, 10 seconds rest between:","Jumping jacks · wall sit · press-ups · crunches","Step-ups (stairs or sturdy step) · squats · plank","High knees · lunges · side plank (each side)","Move briskly but with control","Cool down: slow breathing, gentle stretch"],tip:"Seven focused minutes beats an hour you never do. Tick it daily and watch the streak — and your strength — build.",warn:"This one is brisk: scale any move down, and stop if you feel dizzy or unwell.",yt:"https://www.youtube.com/results?search_query=7+minute+workout+full+body+follow+along",ytlbl:"Watch 7-minute workouts"},
+];
+
 const PLANS = [
   {
     id:"free",tier:"Free",price:0,ap:0,fbadge:"Forever Free",
@@ -337,7 +356,7 @@ const PLANS = [
     features:[
       {t:"Daily Vitality Score (morning + evening)",i:true},
       {t:"5 AI wellness messages per day",i:true},
-      {t:"Full yoga, breath, Tai Chi & meditation library",i:true},
+      {t:"Full library: yoga, breath, cardio, meditation & more",i:true},
       {t:"Daily morning & evening ritual",i:true},
       {t:"Mood, energy & stress check-in + streaks",i:true},
       {t:"Unlimited AI coaching",i:false},
@@ -529,7 +548,7 @@ export default function App() {
   // ─── HELPERS ───
   const go = (p) => { setPage(p); window.scrollTo(0, 0); };
   // Safe analytics event tracker — never breaks the app if analytics fails
-  const ev = (name, data) => { try { track(name, data); } catch {} };
+  const ev = (name, data) => { try { track(name, data); } catch {} try { if (window.posthog && window.posthog.capture) window.posthog.capture(name, data); } catch {} };
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(""), 3000); };
 
   // Date key helpers
@@ -1166,7 +1185,7 @@ export default function App() {
           <div className="lbl">Practice Library</div>
           <h2 className="h2" style={{marginBottom:18}}>Wisdom in <em>movement</em>.</h2>
           <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
-            {[["yoga","🧘 Yoga"],["breathing","🫁 Breathwork"],["taichi","🌊 Tai Chi"],["meditation","🧠 Meditation"]].map(([v,l]) => (
+            {[["yoga","🧘 Yoga"],["breathing","🫁 Breathwork"],["taichi","🌊 Tai Chi"],["meditation","🧠 Meditation"],["cardio","💪 Cardio & Strength"]].map(([v,l]) => (
               <button key={v} onClick={() => setExCat(v)} className={"btn " + (exCat === v ? "btn-gold" : "btn-outline") + " btn-sm"}>{l}</button>
             ))}
           </div>
@@ -1179,14 +1198,14 @@ export default function App() {
               <div className="body-sm">{isPro ? "Ask your AI Coach for a fresh routine tailored to exactly how you feel right now — unlimited variations." : "Pro members can ask the AI Coach for unlimited fresh routines, personalised to their body, mood and goals. The library never runs dry."}</div>
             </div>
             {isPro ? (
-              <button className="btn btn-gold btn-sm" onClick={() => { ev("ai_alternatives_used", { cat: exCat }); setAiMode(exCat === "breathing" ? "breathing" : exCat === "meditation" ? "meditation" : exCat === "taichi" ? "wellness" : "yoga"); setMsgs([INIT_MSG]); setInp("Give me a fresh " + exCat + " routine that's different from the usual — tailored to how I feel today."); go("coach"); }}>Ask AI for a fresh routine</button>
+              <button className="btn btn-gold btn-sm" onClick={() => { ev("ai_alternatives_used", { cat: exCat }); setAiMode(exCat === "breathing" ? "breathing" : exCat === "meditation" ? "meditation" : exCat === "taichi" || exCat === "cardio" ? "wellness" : "yoga"); setMsgs([INIT_MSG]); setInp("Give me a fresh " + exCat + " routine that's different from the usual — tailored to how I feel today."); go("coach"); }}>Ask AI for a fresh routine</button>
             ) : (
               <button className="btn btn-gold btn-sm" onClick={() => { ev("paywall_shown", { reason: "ai_alternatives" }); go("pricing"); }}>Unlock with Pro</button>
             )}
           </div>
 
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
-            {(exCat === "yoga" ? YOGA_DATA : exCat === "breathing" ? BREATH_DATA : exCat === "taichi" ? TAICHI_DATA : MEDITATION_DATA).map((ex, i) => (
+            {(exCat === "yoga" ? YOGA_DATA : exCat === "breathing" ? BREATH_DATA : exCat === "taichi" ? TAICHI_DATA : exCat === "meditation" ? MEDITATION_DATA : CARDIO_DATA).map((ex, i) => (
               <div key={i} className="card" style={{cursor:"pointer"}} onClick={() => setExDetail(ex)}>
                 <h3 className="h3" style={{fontSize:18,marginBottom:6}}>{ex.name}</h3>
                 <div style={{fontSize:12,color:"var(--gold-dark)",marginBottom:8,fontWeight:700}}>{ex.level}</div>
