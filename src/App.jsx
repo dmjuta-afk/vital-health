@@ -1,5 +1,13 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { track } from "@vercel/analytics";
+import { createClient } from "@supabase/supabase-js";
+
+// ─── SUPABASE (cloud accounts + permanent data) ───
+const SB_URL = import.meta.env.VITE_SUPABASE_URL;
+const SB_KEY = import.meta.env.VITE_SUPABASE_KEY;
+// If env vars are missing the app still runs fully in local-only mode (never breaks)
+const supabase = (SB_URL && SB_KEY) ? createClient(SB_URL, SB_KEY) : null;
+const CLOUD_ON = !!supabase;
 
 // ─── POSTHOG ANALYTICS ─── (free funnel events; this key is write-only & safe in public code)
 if (typeof window !== "undefined" && !window.__vitalPostHog) {
@@ -382,7 +390,7 @@ const PLANS = [
       {t:"Export health summary for your doctor (CSV)",i:true},
       {t:"Priority support",i:true},
     ],
-    btn:"gold",cta:"Start Pro — 14 Days Free"
+    btn:"gold",cta:"Start Pro"
   },
 ];
 
@@ -453,6 +461,20 @@ export default function App() {
   // Daily-rotating ritual themes (null = use today's auto-rotation; number = user's chosen index)
   const [morningThemePick, setMorningThemePick] = useState(null);
   const [eveningThemePick, setEveningThemePick] = useState(null);
+  // Large-text accessibility mode (persisted) — friendlier for older eyes
+  const [bigText, setBigText] = useState(() => { try { return localStorage.getItem("v10bigtext") === "y"; } catch { return false; } });
+  // ─── CLOUD ACCOUNT STATE ───
+  const [session, setSession] = useState(null);          // Supabase session (null = signed out)
+  const [authChecked, setAuthChecked] = useState(!CLOUD_ON); // has initial session check finished
+  const [showAuth, setShowAuth] = useState(false);        // auth modal open
+  const [authMode, setAuthMode] = useState("signup");     // signup | login | reset
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPass, setAuthPass] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMsg, setAuthMsg] = useState("");
+  const [syncState, setSyncState] = useState("idle");     // idle | syncing | saved | error
+  const cloudLoaded = useRef(false);                       // guard: don't push before first pull
+  const toggleBigText = () => { const v = !bigText; setBigText(v); try { localStorage.setItem("v10bigtext", v ? "y" : "n"); } catch {} ev("bigtext_toggled", { on: v }); };
   const [reflection, setReflection] = useState("");
   const [gratitude, setGratitude] = useState("");
 
@@ -550,6 +572,173 @@ export default function App() {
   // Safe analytics event tracker — never breaks the app if analytics fails
   const ev = (name, data) => { try { track(name, data); } catch {} try { if (window.posthog && window.posthog.capture) window.posthog.capture(name, data); } catch {} };
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(""), 3000); };
+
+  // ═══════════ CLOUD SYNC ENGINE ═══════════
+  // Local state stays the source of truth for speed/offline; the cloud is the permanent record.
+
+  // Bundle every piece of user data into one object for the cloud
+  const collectState = () => ({
+    v: 1,
+    goal: wellnessGoal,
+    onboarded,
+    streak,
+    lastCheckin,
+    dailyLog,
+    memories,
+    bigText,
+  });
+
+  // Apply a cloud bundle back into local state + localStorage
+  const applyState = (d) => {
+    if (!d || typeof d !== "object") return;
+    try {
+      if (d.goal) { setWellnessGoal(d.goal); localStorage.setItem("v10goal", d.goal); }
+      if (d.onboarded) { setOnboarded(true); localStorage.setItem("v10onb", "y"); }
+      if (typeof d.streak === "number") { setStreak(d.streak); localStorage.setItem("v10streak", String(d.streak)); }
+      if (d.lastCheckin) { setLastCheckin(d.lastCheckin); localStorage.setItem("v10last", d.lastCheckin); }
+      if (d.dailyLog && typeof d.dailyLog === "object") { setDailyLog(d.dailyLog); localStorage.setItem("v10log", JSON.stringify(d.dailyLog)); }
+      if (Array.isArray(d.memories)) { setMemories(d.memories); localStorage.setItem("v10mem", JSON.stringify(d.memories)); }
+      if (typeof d.bigText === "boolean") { setBigText(d.bigText); localStorage.setItem("v10bigtext", d.bigText ? "y" : "n"); }
+    } catch {}
+  };
+
+  // Merge rule: keep the higher streak and the union of logs/memories — never lose data
+  const mergeState = (cloud, local) => {
+    if (!cloud) return local;
+    return {
+      v: 1,
+      goal: local.goal || cloud.goal,
+      onboarded: local.onboarded || cloud.onboarded,
+      streak: Math.max(cloud.streak || 0, local.streak || 0),
+      lastCheckin: (local.lastCheckin || "") > (cloud.lastCheckin || "") ? local.lastCheckin : cloud.lastCheckin,
+      dailyLog: { ...(cloud.dailyLog || {}), ...(local.dailyLog || {}) },
+      memories: Array.from(new Set([...(cloud.memories || []), ...(local.memories || [])])).slice(-40),
+      bigText: local.bigText,
+    };
+  };
+
+  // Watch auth session (login / logout / refresh)
+  useEffect(() => {
+    if (!CLOUD_ON) return;
+    let alive = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!alive) return;
+      setSession(data?.session || null);
+      setAuthChecked(true);
+    }).catch(() => { if (alive) setAuthChecked(true); });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s);
+      if (!s) cloudLoaded.current = false; // reset on sign-out
+    });
+    return () => { alive = false; sub?.subscription?.unsubscribe?.(); };
+  }, []);
+
+  // On sign-in: pull cloud data, merge with whatever is on this device, save the merge back
+  useEffect(() => {
+    if (!CLOUD_ON || !session?.user) return;
+    let alive = true;
+    (async () => {
+      setSyncState("syncing");
+      try {
+        const { data, error } = await supabase
+          .from("user_data")
+          .select("data, plan")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (!alive) return;
+
+        const local = collectState();
+        const merged = mergeState(data?.data, local);
+        applyState(merged);
+
+        // Plan comes from the cloud (server-side truth for Pro access)
+        const cloudPlan = data?.plan || "free";
+        setUserPlan(cloudPlan);
+        try { localStorage.setItem("v10plan", cloudPlan); } catch {}
+
+        await supabase.from("user_data").upsert({
+          user_id: session.user.id,
+          data: merged,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+
+        cloudLoaded.current = true;
+        if (alive) { setSyncState("saved"); ev("cloud_synced"); }
+      } catch {
+        if (alive) setSyncState("error");
+      }
+    })();
+    return () => { alive = false; };
+  }, [session?.user?.id]);
+
+  // Auto-save to cloud whenever data changes (debounced, only after first pull)
+  useEffect(() => {
+    if (!CLOUD_ON || !session?.user || !cloudLoaded.current) return;
+    const t = setTimeout(async () => {
+      try {
+        setSyncState("syncing");
+        await supabase.from("user_data").upsert({
+          user_id: session.user.id,
+          data: collectState(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+        setSyncState("saved");
+      } catch { setSyncState("error"); }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [dailyLog, memories, streak, lastCheckin, wellnessGoal, bigText, session?.user?.id]);
+
+  // ─── AUTH ACTIONS ───
+  const doSignup = async () => {
+    if (!CLOUD_ON) return;
+    setAuthBusy(true); setAuthMsg("");
+    try {
+      const { error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPass });
+      if (error) throw error;
+      ev("account_created");
+      setAuthMsg("✓ Check your email to confirm your account, then log in.");
+      setAuthMode("login");
+    } catch (e) {
+      setAuthMsg(e?.message || "Could not create account. Please try again.");
+    }
+    setAuthBusy(false);
+  };
+
+  const doLogin = async () => {
+    if (!CLOUD_ON) return;
+    setAuthBusy(true); setAuthMsg("");
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPass });
+      if (error) throw error;
+      ev("account_login");
+      setShowAuth(false); setAuthPass(""); setAuthMsg("");
+      showToast("✓ Signed in — your data is saved to the cloud");
+    } catch (e) {
+      setAuthMsg(e?.message || "Could not sign in. Check your email and password.");
+    }
+    setAuthBusy(false);
+  };
+
+  const doReset = async () => {
+    if (!CLOUD_ON) return;
+    setAuthBusy(true); setAuthMsg("");
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(authEmail.trim(), { redirectTo: window.location.origin });
+      if (error) throw error;
+      setAuthMsg("✓ Password reset link sent — check your email.");
+    } catch (e) {
+      setAuthMsg(e?.message || "Could not send reset email.");
+    }
+    setAuthBusy(false);
+  };
+
+  const doLogout = async () => {
+    if (!CLOUD_ON) return;
+    try { await supabase.auth.signOut(); } catch {}
+    ev("account_logout");
+    showToast("Signed out. Your data is safe in the cloud.");
+  };
 
   // Date key helpers
   const todayKey = () => {
@@ -745,12 +934,21 @@ export default function App() {
 
   const selectPlan = (id) => {
     if (id === "free") { ev("plan_selected", { plan: "free" }); go("morning"); return; }
+    // Require an account before paying — this is how we link the payment to the person
+    if (CLOUD_ON && !session?.user) {
+      ev("auth_required_for_checkout");
+      setAuthMode("signup"); setAuthMsg("Create your free account first — this links your subscription to you, so Pro unlocks on every device."); setShowAuth(true);
+      return;
+    }
     const billing = annual ? "annual" : "monthly";
-    ev("checkout_started", { plan: id, billing, founder: FOUNDER_MODE });
+    ev("checkout_started", { plan: id, billing, founder: FOUNDER_MODE, email: session?.user?.email });
     // During founder mode, send buyers to the founder-priced links; otherwise regular
     const prefix = FOUNDER_MODE ? "founder" : "pro";
     const link = PAYSTACK[prefix + (annual ? "_annual" : "_monthly")];
-    if (link) window.open(link, "_blank");
+    if (link) {
+      window.open(link, "_blank");
+      showToast("Complete payment with the SAME email you signed up with — Pro unlocks within minutes.");
+    }
   };
 
   // ─── AI CHAT ───
@@ -903,7 +1101,7 @@ export default function App() {
 
   // ═══ MAIN APP ═══
   return (
-    <>
+    <div style={{zoom: bigText ? 1.15 : 1}}>
       <style>{CSS}</style>
 
       {/* NAV */}
@@ -953,6 +1151,13 @@ export default function App() {
             <div className="section" style={{textAlign:"center"}}>
               <div className="lbl">AI Wellness Companion</div>
               <h1 className="h1" style={{maxWidth:760,margin:"0 auto 18px"}}>Your daily ritual for <em>vitality</em>,<br/>guided by intelligence.</h1>
+              <button className="btn btn-gold" style={{padding:"14px 28px",fontSize:16,marginBottom:10}} onClick={() => { ev("today_ritual_tapped"); go(new Date().getHours() < 15 ? "morning" : "evening"); }}>🌿 Start today's ritual →</button>
+              {CLOUD_ON && !session?.user && streak > 0 && (
+                <div style={{maxWidth:520,margin:"14px auto 0",background:"var(--gold-bg)",border:"1.5px solid var(--gb)",borderRadius:"var(--r2)",padding:"12px 16px"}}>
+                  <div style={{fontSize:13.5,color:"var(--text2)",fontWeight:600,marginBottom:8}}>🔥 You're on a {streak}-day streak — but it's only saved on this device.</div>
+                  <button className="btn btn-gold btn-sm" onClick={() => { setAuthMode("signup"); setAuthMsg(""); setShowAuth(true); ev("auth_opened", { from: "streak_banner" }); }}>Save it forever — free account</button>
+                </div>
+              )}
               <p className="body-text" style={{maxWidth:580,margin:"0 auto 28px"}}>Yoga, breathwork, Ayurveda, meditation and longevity science — woven into a single, gentle daily practice that knows you personally.</p>
               <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
                 <button className="btn btn-gold-lg" onClick={() => go("morning")}>Begin Today's Ritual</button>
@@ -1052,6 +1257,7 @@ export default function App() {
                 <div style={{marginTop:14,padding:"14px 16px",background:"var(--green-bg)",border:"1px solid var(--green)",borderRadius:"var(--r2)",textAlign:"center"}}>
                   <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:8}}>Beautiful start to your day 🌿</div>
                   <button className="btn btn-outline btn-sm" onClick={() => go("coach")}>Ask your AI Coach what's next →</button>
+                  <button className="btn btn-outline btn-sm" style={{marginLeft:8}} onClick={async () => { ev("streak_shared", { streak }); const txt = "Day " + streak + " of my wellness streak with VITÁL 🌿 Small daily rituals, real energy. Free to start: https://myvital.app"; try { if (navigator.share) { await navigator.share({ text: txt }); } else { await navigator.clipboard.writeText(txt); showToast("✓ Copied — paste it anywhere!"); } } catch {} }}>🔥 Share your streak</button>
                 </div>
               )}
             </div>
@@ -1407,6 +1613,40 @@ export default function App() {
               ))}
             </div>
           </div>
+          {CLOUD_ON && (
+            <div className="card" style={{marginBottom:14}}>
+              <div className="lbl">Your Account</div>
+              {session?.user ? (
+                <>
+                  <div style={{fontWeight:700,color:"var(--text)",fontSize:15,marginTop:6}}>{session.user.email}</div>
+                  <p className="body-sm" style={{marginTop:4}}>
+                    ☁️ Your progress is saved permanently and syncs across all your devices.
+                    {syncState === "syncing" && <span style={{color:"var(--gold-dark)",fontWeight:600}}> Saving…</span>}
+                    {syncState === "saved" && <span style={{color:"var(--green)",fontWeight:600}}> All changes saved.</span>}
+                    {syncState === "error" && <span style={{color:"var(--text3)",fontWeight:600}}> Offline — will save when reconnected.</span>}
+                  </p>
+                  <button className="btn btn-outline btn-sm" style={{marginTop:12}} onClick={doLogout}>Sign out</button>
+                </>
+              ) : (
+                <>
+                  <p className="body-sm" style={{marginTop:6}}>
+                    <strong>Your data is only on this device.</strong> Create a free account to save your streak, history and AI memory permanently — and use VITÁL on any device.
+                  </p>
+                  <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+                    <button className="btn btn-gold btn-sm" onClick={() => { setAuthMode("signup"); setAuthMsg(""); setShowAuth(true); ev("auth_opened", { from: "profile" }); }}>Create free account</button>
+                    <button className="btn btn-outline btn-sm" onClick={() => { setAuthMode("login"); setAuthMsg(""); setShowAuth(true); }}>Sign in</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <div className="card" style={{marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <div>
+              <div style={{fontWeight:700,color:"var(--text)",fontSize:15}}>Large text</div>
+              <div className="body-sm">Bigger, easier-to-read text across the whole app</div>
+            </div>
+            <button className={"btn btn-sm " + (bigText ? "btn-gold" : "btn-outline")} onClick={toggleBigText}>{bigText ? "On" : "Off"}</button>
+          </div>
           <div className="card" style={{marginBottom:16}}>
             <div className="lbl">Daily Basics</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
@@ -1510,7 +1750,57 @@ export default function App() {
           </div>
           <p className="body-sm" style={{textAlign:"center",marginTop:24}}>Cancel anytime · Secure payment via Paystack · Receipts emailed automatically</p>
           <p className="body-sm" style={{textAlign:"center",marginTop:6,fontSize:12}}>Billed in South African Rand (ZAR). USD shown (±) is approximate.</p>
+          <p className="body-sm" style={{textAlign:"center",marginTop:10,fontSize:12.5,fontWeight:600}}>For comparison: Calm ~R320/mo · Headspace ~R240/mo · <span style={{color:"var(--gold-dark)",fontWeight:700}}>VITÁL Founder R149/mo — locked forever</span></p>
         </div></div></div>
+      )}
+
+      {/* AUTH MODAL */}
+      {showAuth && CLOUD_ON && (
+        <div className="modal-bg" onClick={() => setShowAuth(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:420}}>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:34,marginBottom:8}}>☁️</div>
+              <h3 className="h3">{authMode === "signup" ? "Save your progress forever" : authMode === "login" ? "Welcome back" : "Reset your password"}</h3>
+              <p className="body-sm" style={{marginTop:6}}>
+                {authMode === "signup"
+                  ? "Free account. Your streak, history and AI memory sync to every device — and are never lost."
+                  : authMode === "login"
+                  ? "Sign in to restore your wellness journey."
+                  : "We'll email you a secure link to set a new password."}
+              </p>
+            </div>
+
+            <input className="input" type="email" autoComplete="email" placeholder="Email address" value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)} style={{width:"100%",marginBottom:10}} />
+
+            {authMode !== "reset" && (
+              <input className="input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+                placeholder={authMode === "signup" ? "Create a password (min 6 characters)" : "Password"} value={authPass}
+                onChange={e => setAuthPass(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !authBusy) { authMode === "signup" ? doSignup() : doLogin(); } }}
+                style={{width:"100%",marginBottom:10}} />
+            )}
+
+            {authMsg && (
+              <div style={{fontSize:13,fontWeight:600,marginBottom:10,padding:"10px 12px",borderRadius:"var(--r2)",
+                background: authMsg.startsWith("✓") ? "var(--green-bg)" : "var(--gold-bg)",
+                color: authMsg.startsWith("✓") ? "var(--green)" : "var(--gold-dark)"}}>{authMsg}</div>
+            )}
+
+            <button className="btn btn-gold" style={{width:"100%",padding:13,marginBottom:10}} disabled={authBusy || !authEmail || (authMode !== "reset" && !authPass)}
+              onClick={() => { authMode === "signup" ? doSignup() : authMode === "login" ? doLogin() : doReset(); }}>
+              {authBusy ? "Please wait…" : authMode === "signup" ? "Create free account" : authMode === "login" ? "Sign in" : "Send reset link"}
+            </button>
+
+            <div style={{textAlign:"center",fontSize:13,color:"var(--text3)",fontWeight:600}}>
+              {authMode === "signup" && <span>Already have an account? <button onClick={() => { setAuthMode("login"); setAuthMsg(""); }} style={{background:"none",border:"none",color:"var(--gold-dark)",fontWeight:700,cursor:"pointer",fontSize:13}}>Sign in</button></span>}
+              {authMode === "login" && <span>New here? <button onClick={() => { setAuthMode("signup"); setAuthMsg(""); }} style={{background:"none",border:"none",color:"var(--gold-dark)",fontWeight:700,cursor:"pointer",fontSize:13}}>Create an account</button> · <button onClick={() => { setAuthMode("reset"); setAuthMsg(""); }} style={{background:"none",border:"none",color:"var(--text3)",fontWeight:700,cursor:"pointer",fontSize:13}}>Forgot password?</button></span>}
+              {authMode === "reset" && <button onClick={() => { setAuthMode("login"); setAuthMsg(""); }} style={{background:"none",border:"none",color:"var(--gold-dark)",fontWeight:700,cursor:"pointer",fontSize:13}}>Back to sign in</button>}
+            </div>
+
+            <button className="btn btn-outline btn-sm" style={{width:"100%",marginTop:14}} onClick={() => setShowAuth(false)}>Maybe later</button>
+          </div>
+        </div>
       )}
 
       {/* UPGRADE MODAL */}
@@ -1536,7 +1826,7 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <button className="btn btn-gold" style={{width:"100%",padding:13,marginBottom:10}} onClick={() => { ev("checkout_started", { plan: "pro", billing: "monthly", from: "paywall_modal", founder: FOUNDER_MODE }); setShowUpgrade(false); window.open(FOUNDER_MODE ? PAYSTACK.founder_monthly : PAYSTACK.pro_monthly, "_blank"); }}>{FOUNDER_MODE ? "Claim Founder Price — R149/mo" : "Upgrade to Pro Now"}</button>
+            <button className="btn btn-gold" style={{width:"100%",padding:13,marginBottom:10}} onClick={() => { if (CLOUD_ON && !session?.user) { ev("auth_required_for_checkout"); setShowUpgrade(false); setAuthMode("signup"); setAuthMsg("Create your free account first — this links your subscription to you, so Pro unlocks on every device."); setShowAuth(true); return; } ev("checkout_started", { plan: "pro", billing: "monthly", from: "paywall_modal", founder: FOUNDER_MODE, email: session?.user?.email }); setShowUpgrade(false); window.open(FOUNDER_MODE ? PAYSTACK.founder_monthly : PAYSTACK.pro_monthly, "_blank"); }}>{FOUNDER_MODE ? "Claim Founder Price — R149/mo" : "Upgrade to Pro Now"}</button>
             <button onClick={() => setShowUpgrade(false)} style={{background:"none",border:"none",color:"var(--text3)",fontSize:13,cursor:"pointer",fontWeight:600}}>Continue with free plan</button>
           </div>
         </div>
@@ -1568,6 +1858,6 @@ export default function App() {
         </div>
         <div style={{fontSize:11,color:"var(--text3)",fontWeight:600}}>© 2026 VITÁL · ABC UP PTY LTD · hello@myvital.app</div>
       </footer>
-    </>
+    </div>
   );
 }
